@@ -16,8 +16,8 @@ message("Source Object setup..")
 sou_obj_desc <- "SO_BAMOSZ_FP_IMP"
 sou_obj_id <- psqlQuery(sprintf("SELECT id FROM dw.source_object WHERE constant='%s';",sou_obj_desc))$result[1,1]
 ###############################################################################
-message(paste0("Source Object id: ",sou_obj_desc))
-message(paste0("Source Object constant: ",sou_obj_id))
+message(paste0("Source Object id: ",sou_obj_id))
+message(paste0("Source Object constant: ",sou_obj_desc))
 
 message("\n")
 message("Creating import control table..")
@@ -67,5 +67,5 @@ for(i_fundid in ctrl_df$id){
 }
 
 message("\n")
-message(paste("Script ends: ",Sys.time()))
+message(paste("Job ends: ",Sys.time()))
 message("----------------------------------------")
