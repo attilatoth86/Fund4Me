@@ -14,7 +14,11 @@ message("\n")
 message("Source Object setup..")
 ###############################################################################
 sou_obj_desc <- "SO_BAMOSZ_FP_IMP"
-sou_obj_id <- psqlQuery(sprintf("SELECT id FROM dw.source_object WHERE constant='%s';",sou_obj_desc))$result[1,1]
+if(sou_obj_desc!=psqlQuery(sprintf("SELECT constant FROM dw.source_object WHERE constant='%s'",sou_obj_desc))$result[1,1]){
+  stop("Invalid source object!")
+} else {
+  sou_obj_id <- psqlQuery(sprintf("SELECT id FROM dw.source_object WHERE constant='%s';",sou_obj_desc))$result[1,1]
+}
 ###############################################################################
 message(paste0("Source Object id: ",sou_obj_id))
 message(paste0("Source Object constant: ",sou_obj_desc))
