@@ -2,9 +2,9 @@
 source("db_f.R")
 
 ### USER VARIABLES ############################################################
-fund_short_name <- "AEGON Alfa"
-file_path <- "/home/ati/Fund4Me/data_source/Aegon Alfa.csv"
-no_skip_lines <- 50 # default should be 18
+fund_short_name <- "AEGON Polish Bond Fund"
+file_path <- "/home/ati/Fund4Me/data_source/AEGON Lengyel Kötvény.csv"
+no_skip_lines <- 18 # default should be 18
 ###############################################################################
 
 if(fund_short_name!=psqlQuery(sprintf("SELECT short_name FROM dw.fund WHERE short_name='%s'",fund_short_name))$result[1,1]){
@@ -38,6 +38,7 @@ data_import$dw_fund_id <- psqlQuery(sprintf("SELECT id FROM dw.fund WHERE short_
 data_import$dw_fund_short_name <- fund_short_name
 data_import$source_object_id <- sou_obj_id
 data_import$source_object_desc <- sou_obj_desc
+data_import <- data_import[is.na(data_import$price)==F,]
 
 psqlQuery("TRUNCATE ld.ld_bamosz_fund_price;")
 
