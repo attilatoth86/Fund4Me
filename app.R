@@ -122,8 +122,8 @@ ui <- dashboardPage(
                    sidebarMenu(
                      menuItem("Home", tabName = "home", icon = icon("home")),
                      menuItem("Funds",tabName = NULL, icon = icon("line-chart"),
-                              menuItem("Overview", tabName = "funds_ov", icon = icon("angle-right")), # badgeLabel = "disabled", badgeColor = "red"
-                              menuItem("Details", tabName = "fundprices", icon = icon("angle-right"))
+                              menuItem("Return & Risk Summary", tabName = "funds_returnrisksum", icon = icon("angle-right"), badgeLabel = "new", badgeColor = "green"),
+                              menuItem("Price Charts", tabName = "funds_pricecharts", icon = icon("angle-right"))
                      )
                    ) # sidebarMenu() end
   ),
@@ -244,8 +244,8 @@ ui <- dashboardPage(
                        ) # column() end
               ) # fluidRow() end
       ),
-      tabItem(tabName = "funds_ov",
-              h2("Funds", tags$small("Overview")),
+      tabItem(tabName = "funds_returnrisksum",
+              h2("Funds", tags$small("Return & Risk Summary")),
               fluidRow(
                 column(width = 8,
                        box(status = "success",
@@ -283,8 +283,8 @@ ui <- dashboardPage(
                 )
               )
       ),
-      tabItem(tabName = "fundprices",
-              h2("Funds", tags$small("Details")),
+      tabItem(tabName = "funds_pricecharts",
+              h2("Funds", tags$small("Historical Price Charts")),
               fluidRow(uiOutput("dyn_ui_block"))
       )
 
