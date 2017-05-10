@@ -6,118 +6,104 @@ library(shinydashboard) # https://rstudio.github.io/shinydashboard/
 library(plotly) # https://plot.ly
 library(DT) # https://rstudio.github.io/DT/
 library(PerformanceAnalytics) # https://www.rdocumentation.org/packages/PerformanceAnalytics/
+library(plyr)
+library(dplyr)
 
 # Init source external resources ------------------------------------------
 
-source("f.R")
+#source("f.R")
+source("db_f.R")
 
 # SERV init ---------------------------------------------------------------
 
 server <- function(input, output, session) {
   
-  progress <- Progress$new(session, min=1, max=4)
+  progress <- Progress$new(session, min=0, max=4)
   on.exit(progress$close())
   
   progress$set(message = 'Fund4Me is loading data in the background.',
                detail = 'You may use the application meanwhile..')
-  
-  chrt_dt <- psqlQuery("SELECT fund_id, description AS fund_name, value_date, change_pct FROM app.fund_return_calc_mvw
-                       WHERE description like 'AEGON%'
-                       ORDER BY fund_id, value_date
-                       ")$result
-  progress$set(value = 1)
-  perf_dt <- psqlQuery("SELECT fund_id, 
-                               'Cumulative performance (%)' \"Measure\", 
-                               return_ytd*100 \"YTD\", 
-                               return_ann_1y*100 \"1Y\", 
-                               return_2y*100 \"2Y\", 
-                               return_3y*100 \"3Y\", 
-                               return_5y*100 \"5Y\" 
-                        FROM app.fund_hist_tbl_vw
-                       UNION ALL
-                       SELECT fund_id, 
-                              'Annualized performance (%)', 
-                              NULL, 
-                              return_ann_1y*100, 
-                              return_ann_2y*100, 
-                              return_ann_3y*100, 
-                              return_ann_5y*100 
-                       FROM app.fund_hist_tbl_vw t
-                       ORDER BY fund_id, \"Measure\" DESC
-                       ")$result
-  progress$set(value = 2)
-  ctrl_dt <- psqlQuery("SELECT * FROM app.fund_hist_tbl_vw")$result
-  progress$set(value = 3)
-  return_dt <- psqlQuery("SELECT * FROM app.fund_return_calc_mvw WHERE return IS NOT NULL ORDER BY fund_id, value_date")$result
-  progress$set(value = 4)
-  #data.frame(return_dt[return_dt$fund_id==16,"return",drop=F],row.names=return_dt[return_dt$fund_id==16,"value_date"])
-  #i <- 18
-  #r <- 4
-
-  # Processing funds 1by1
-  lapply(unique(chrt_dt$fund_id), function(i){
-    
-    # Relevant dates
-    i_prc_dts <- ctrl_dt[ctrl_dt$fund_id==i,c("fund_id","dt_1y","dt_2y","dt_3y","dt_5y")]
-    
-    dt_proc <- chrt_dt[chrt_dt$fund_id==i,]
-    output[[paste0("dyn_plot_out",i)]] <- renderPlotly(
-        plot_ly() %>% add_trace(data=dt_proc, x=~value_date, y=~change_pct, mode="lines") %>%
-          layout(xaxis=list(title=""), yaxis=list(title="Price Change %"))
-    )
-    
-    i_add_metrics <- data.frame(NA,NA,NA,NA,NA)
-    colnames(i_add_metrics) <- c("Measure","1Y","2Y","3Y","5Y")
-    for(r in c(2:5)) {
-        if(is.na(i_prc_dts[1,r])==F){
-          return_dt_proc <- data.frame(return_dt[return_dt$fund_id==i,c("return","return_rf_wd"),drop=F],row.names=return_dt[return_dt$fund_id==i,"value_date"])
-          return_dt_proc <- return_dt_proc[rownames(return_dt_proc)>=i_prc_dts[1,r],,drop=F]  
-          i_add_metrics[1,r] <- round(StdDev.annualized(return_dt_proc[,"return",drop=F], scale = 252),digits=2)
-          i_add_metrics[2,r] <- round(SharpeRatio.annualized(R = return_dt_proc[,"return",drop=F], Rf = return_dt_proc[,"return_rf_wd",drop=F], scale=252, geometric=T),digits=2)
-          i_add_metrics[3,r] <- round(VaR(return_dt_proc[,"return",drop=F], p=.95, method="historical"),digits=2)
-          i_add_metrics[4,r] <- round(maxDrawdown(return_dt_proc[,"return",drop=F], geometric=T, invert=F),digits=2)
-        }
-        i_add_metrics[1,1] <- "Annualized Volatility"
-        i_add_metrics[2,1] <- "Annualized Sharpe Ratio"
-        i_add_metrics[3,1] <- "VaR (p=95%)"
-        i_add_metrics[4,1] <- "Maximum Drawdown"
+  progress$set(value = 0) #######################################################################################
+  dt_dbobj_rep_fund_price_daily_analytics <- psqlQuery("SELECT * FROM rep.fund_price_daily_analytics")$result
+  progress$set(value = 1) #######################################################################################
+  dt_dbobj_rep_fund_summary <- psqlQuery("SELECT fs.*, f.name, f.short_name
+                                          FROM rep.fund_summary fs,
+                                               dw.fund f 
+                                          WHERE fs.fund_id=f.id
+                                         ")$result
+  progress$set(value = 2) #######################################################################################
+  disp_DT_cum_return <- dt_dbobj_rep_fund_summary %>% mutate(return_ytd=round((price_recent/price_ytd-1),digits=4),
+                                                             return_1m=round((price_recent/price_1m-1),digits=4),
+                                                             return_3m=round((price_recent/price_3m-1),digits=4),
+                                                             return_6m=round((price_recent/price_6m-1),digits=4),
+                                                             return_1yr=round((price_recent/price_1yr-1),digits=4),
+                                                             return_2yr=round((price_recent/price_2yr-1),digits=4),
+                                                             return_3yr=round((price_recent/price_3yr-1),digits=4),
+                                                             return_5yr=round((price_recent/price_5yr-1),digits=4)) %>% 
+                                                      select("Fund Name"=short_name, "YTD"=return_ytd, "1M"=return_1m, "3M"=return_3m, "6M"=return_6m,
+                                                             "1Y"=return_1yr, "2Y"=return_2yr, "3Y"=return_3yr, "5Y"=return_5yr)
+  progress$set(value = 3) #######################################################################################
+  disp_DT_ann_return <- dt_dbobj_rep_fund_summary %>% mutate(return_ann_2yr=round(((price_recent/price_2yr)^(365/(as.numeric(date_recent-date_2yr)+1))-1),digits=4),
+                                                             return_ann_3yr=round(((price_recent/price_3yr)^(365/(as.numeric(date_recent-date_3yr)+1))-1),digits=4),
+                                                             return_ann_5yr=round(((price_recent/price_5yr)^(365/(as.numeric(date_recent-date_5yr)+1))-1),digits=4)
+                                                             ) %>%
+                                                      select("Fund Name"=short_name, "2Y"=return_ann_2yr, "3Y"=return_ann_3yr, "5Y"=return_ann_5yr)
+  progress$set(value = 4) #######################################################################################
+  dt_calc_volatility <- data.frame(integer(),double(),double(),double(),double(),double())
+  for(i_vol_fundid in dt_dbobj_rep_fund_summary$fund_id){
+    val_calc_volatility <- vector()
+    for(i_vol_date in dt_dbobj_rep_fund_summary[dt_dbobj_rep_fund_summary$fund_id==i_vol_fundid,c("date_1yr","date_2yr","date_3yr","date_5yr","date_10yr")][which(!is.na(dt_dbobj_rep_fund_summary[dt_dbobj_rep_fund_summary$fund_id==i_vol_fundid,c("price_1yr","price_2yr","price_3yr","price_5yr","price_10yr")]))]){
+      dt_proc <- dt_dbobj_rep_fund_price_daily_analytics[dt_dbobj_rep_fund_price_daily_analytics$fund_id==i_vol_fundid & dt_dbobj_rep_fund_price_daily_analytics$date>=i_vol_date & is.na(dt_dbobj_rep_fund_price_daily_analytics$return)==F,"return"]
+      val_calc_volatility <- c(val_calc_volatility,StdDev.annualized(dt_proc,scale=252))
     }
-    
-    perf_dt_proc <- perf_dt[perf_dt$fund_id==i,-c(1,3)]
-    output[[paste0("dyn_table_out",i)]] <- DT::renderDataTable(rbind(perf_dt_proc,i_add_metrics),
-                                                               options = list(dom = 't', ordering=F, searching=F, paging=F, scrollX = F),
-                                                               rownames=F)
-    
-    output[[paste0("dyn_ui_components_out",i)]] <- renderUI({
-      fluidRow(
-        column(width = 6,
-               box(title = unique(chrt_dt["fund_name"][chrt_dt$fund_id==i,]),
-                   width = NULL,
-                   solidHeader = T,
-                   plotlyOutput(paste0("dyn_plot_out",i))
+    dt_calc_volatility <- rbind(dt_calc_volatility,
+                                data.frame(fund_id=i_vol_fundid,
+                                           volatility_1yr=val_calc_volatility[1],
+                                           volatility_2yr=val_calc_volatility[2],
+                                           volatility_3yr=val_calc_volatility[3],
+                                           volatility_5yr=val_calc_volatility[4],
+                                           volatility_10yr=val_calc_volatility[5]
+                                           )
+                                )
+  }
+  disp_DT_volatility <- dt_dbobj_rep_fund_summary %>% left_join(dt_calc_volatility, by="fund_id") %>% select("Fund Name"=short_name, "1Y"=volatility_1yr, "2Y"=volatility_2yr, "3Y"=volatility_3yr, "5Y"=volatility_5yr)
+  
+  dt_dbobj_rep_fund_summary[dt_dbobj_rep_fund_summary$fund_id==i_vol_fundid,c("date_1yr","date_2yr","date_3yr","date_5yr","date_10yr")][which(!is.na(dt_dbobj_rep_fund_summary[dt_dbobj_rep_fund_summary$fund_id==73660,c("price_1yr","price_2yr","price_3yr","price_5yr","price_10yr")]))]
+
+  output$DT_cum_return <- DT::renderDataTable(DT::datatable(disp_DT_cum_return, extensions = "Responsive", options = list(language = list(info = "_START_ to _END_ of _TOTAL_", paginate = list(previous = "<<", `next` = ">>")), ordering=T, order = list(list(5, 'desc')), pageLength = 5, bLengthChange=F, searching=F, paging=T, scrollX = T), rownames=F) %>% formatPercentage(c("YTD","1M","3M","6M","1Y","2Y","3Y","5Y"),2))
+  output$DT_ann_return <- DT::renderDataTable(DT::datatable(disp_DT_ann_return, extensions = "Responsive", options = list(language = list(info = "_START_ to _END_ of _TOTAL_", paginate = list(previous = "<<", `next` = ">>")), ordering=T, order = list(list(1, 'desc')), pageLength = 5, bLengthChange=F, searching=F, paging=T, scrollX = T), rownames=F) %>% formatPercentage(c("2Y","3Y","5Y"),2))
+  output$DT_volatility <- DT::renderDataTable(DT::datatable(disp_DT_volatility, extensions = "Responsive", options = list(language = list(info = "_START_ to _END_ of _TOTAL_", paginate = list(previous = "<<", `next` = ">>")), ordering=T, order = list(list(4, 'asc')), pageLength = 5, bLengthChange=F, searching=F, paging=T, scrollX = T), rownames=F) %>% formatPercentage(c("1Y","2Y","3Y","5Y"),2))
+  
+  # # Processing funds 1by1
+  lapply(dt_dbobj_rep_fund_summary$fund_id, function(i){
+     dt_proc <- dt_dbobj_rep_fund_price_daily_analytics[dt_dbobj_rep_fund_price_daily_analytics$fund_id==i,]
+     output[[paste0("dyn_plot_out",i)]] <- renderPlotly(
+         plot_ly() %>% add_trace(data=dt_proc, x=~date, y=~price_chg*100, mode="lines") %>%
+           layout(xaxis=list(title=""), yaxis=list(title="Price Change %"))
+     )
+     output[[paste0("dyn_ui_components_out",i)]] <- renderUI({
+                box(title = dt_dbobj_rep_fund_summary[dt_dbobj_rep_fund_summary$fund_id==i,"name"],
+                    width = NULL,
+                    solidHeader = T,
+                    plotlyOutput(paste0("dyn_plot_out",i))
+                 )
+     })
+   }) # end of Processing funds 1by1
+
+
+   output$dyn_ui_block <- renderUI({
+     fluidRow(
+       column(width = 12,
+              lapply(dt_dbobj_rep_fund_summary$fund_id, function(i) {
+                box(
+                  solidHeader = T,
+                  width=6,
+                  uiOutput(paste0('dyn_ui_components_out', i))
                 )
-               ),
-        column(width = 6,
-               box(title="Performance, Return & Risk",
-                   status = "primary",
-                   width = NULL,
-                   dataTableOutput(paste0("dyn_table_out",i))),
-                   "Historical performance indications are no guarantee for current or future performance. Performance indications do not consider commissions levied at subscription and/or redemption."
-               )
-      )
-    })
-  }) # end of Processing funds 1by1
-
-
-  output$dyn_ui_block <- renderUI({
-      lapply(unique(chrt_dt$fund_id), function(i) {
-        box(
-          solidHeader = T,
-          width=12,
-          uiOutput(paste0('dyn_ui_components_out', i))
-        )
-      })
-  })
+              })          
+       )
+     )
+   })
 
 } # SERV function end
 
@@ -136,7 +122,7 @@ ui <- dashboardPage(
                    sidebarMenu(
                      menuItem("Home", tabName = "home", icon = icon("home")),
                      menuItem("Funds",tabName = NULL, icon = icon("line-chart"),
-                              menuItem("Overview", tabName = "funds_ov", icon = icon("angle-right"), badgeLabel = "disabled", badgeColor = "red"),
+                              menuItem("Overview", tabName = "funds_ov", icon = icon("angle-right")), # badgeLabel = "disabled", badgeColor = "red"
                               menuItem("Details", tabName = "fundprices", icon = icon("angle-right"))
                      )
                    ) # sidebarMenu() end
@@ -258,7 +244,45 @@ ui <- dashboardPage(
                        ) # column() end
               ) # fluidRow() end
       ),
-
+      tabItem(tabName = "funds_ov",
+              h2("Funds", tags$small("Overview")),
+              fluidRow(
+                column(width = 8,
+                       box(status = "success",
+                           solidHeader = T,
+                           width = NULL,
+                           title = "Cummulative Return",
+                           DT::dataTableOutput("DT_cum_return")
+                        )
+                       ),
+                column(width = 4,
+                       box(status = "success",
+                           solidHeader = T,
+                           width = NULL,
+                           title = "Annualized Return",
+                           DT::dataTableOutput("DT_ann_return")
+                        )
+                       )
+              ),
+              fluidRow(
+                column(width = 12,
+                       div(class="alert alert-warning", #"alert alert-danger",
+                           role="alert",
+                           h4(icon("exclamation-triangle"), " Warning"),
+                           tags$b("Historical performance indications are no guarantee for current or future performance. Performance indications do not consider commissions levied at subscription and/or redemption.")
+                       )
+                )
+              ),
+              fluidRow(
+                column(width = 6,
+                       box(status = "danger",
+                           solidHeader = T,
+                           width = NULL,
+                           title = "Annualized Volatility",
+                           DT::dataTableOutput("DT_volatility"))
+                )
+              )
+      ),
       tabItem(tabName = "fundprices",
               h2("Funds", tags$small("Details")),
               fluidRow(uiOutput("dyn_ui_block"))
