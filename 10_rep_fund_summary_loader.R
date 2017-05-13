@@ -23,21 +23,21 @@ truncateStatus <- psqlQuery("TRUNCATE TABLE rep.fund_summary;")
 message(paste0("Truncate rep.fund_summary table........",truncateStatus$errorMsg))
 
 message("\n")
-queryString <- sprintf("INSERT INTO rep.fund_summary (fund_id, source_object_id, date_start, date_recent, date_ytd, date_1m, date_3m, date_6m, date_1yr, date_2yr, date_3yr, date_5yr, price_start, price_recent, price_ytd, price_1m, price_3m, price_6m, price_1yr, price_2yr, price_3yr, price_5yr)
+queryString <- sprintf("INSERT INTO rep.fund_summary (fund_id, source_object_id, date_start, date_recent, date_ytd, date_1m, date_3m, date_6m, date_1yr, date_2yr, date_3yr, date_5yr, date_10yr, price_start, price_recent, price_ytd, price_1m, price_3m, price_6m, price_1yr, price_2yr, price_3yr, price_5yr, price_10yr, nav_recent)
                           SELECT
                             f.id fund_id,
                             (SELECT id FROM dw.source_object WHERE constant='%s') source_object_id,
                             dw.get_first_fund_price_date(f.id) date_start,
                             dw.get_last_fund_price_date(f.id) date_recent,
-                            dw.get_prev_working_day(DATE_TRUNC('year', dw.get_last_fund_price_date(f.id))::DATE,'HU') date_ytd,
-                            dw.get_prev_working_day((dw.get_last_fund_price_date(f.id)-'1 month'::INTERVAL)::DATE,'HU') date_1m,
-                            dw.get_prev_working_day((dw.get_last_fund_price_date(f.id)-'3 months'::INTERVAL)::DATE,'HU') date_3m,
-                            dw.get_prev_working_day((dw.get_last_fund_price_date(f.id)-'6 months'::INTERVAL)::DATE,'HU') date_6m,
-                            dw.get_prev_working_day((dw.get_last_fund_price_date(f.id)-'1 year'::INTERVAL)::DATE,'HU') date_1yr,
-                            dw.get_prev_working_day((dw.get_last_fund_price_date(f.id)-'2 years'::INTERVAL)::DATE,'HU') date_2yr,
-                            dw.get_prev_working_day((dw.get_last_fund_price_date(f.id)-'3 years'::INTERVAL)::DATE,'HU') date_3yr,
-                            dw.get_prev_working_day((dw.get_last_fund_price_date(f.id)-'5 years'::INTERVAL)::DATE,'HU') date_5yr,
-                            --dw.get_prev_working_day((dw.get_last_fund_price_date(f.id)-'10 years'::INTERVAL)::DATE,'HU') date_10yr,
+                            dw.get_prev_price_marking_day(DATE_TRUNC('year', dw.get_last_fund_price_date(f.id))::DATE,'HU') date_ytd,
+                            dw.get_prev_price_marking_day((dw.get_last_fund_price_date(f.id)-'1 month'::INTERVAL)::DATE,'HU') date_1m,
+                            dw.get_prev_price_marking_day((dw.get_last_fund_price_date(f.id)-'3 months'::INTERVAL)::DATE,'HU') date_3m,
+                            dw.get_prev_price_marking_day((dw.get_last_fund_price_date(f.id)-'6 months'::INTERVAL)::DATE,'HU') date_6m,
+                            dw.get_prev_price_marking_day((dw.get_last_fund_price_date(f.id)-'1 year'::INTERVAL)::DATE,'HU') date_1yr,
+                            dw.get_prev_price_marking_day((dw.get_last_fund_price_date(f.id)-'2 years'::INTERVAL)::DATE,'HU') date_2yr,
+                            dw.get_prev_price_marking_day((dw.get_last_fund_price_date(f.id)-'3 years'::INTERVAL)::DATE,'HU') date_3yr,
+                            dw.get_prev_price_marking_day((dw.get_last_fund_price_date(f.id)-'5 years'::INTERVAL)::DATE,'HU') date_5yr,
+                            dw.get_prev_price_marking_day((dw.get_last_fund_price_date(f.id)-'10 years'::INTERVAL)::DATE,'HU') date_10yr,
                             fpstart.price price_start,
                             fprecent.price price_recent,
                             fpytd.price price_ytd,
@@ -47,20 +47,22 @@ queryString <- sprintf("INSERT INTO rep.fund_summary (fund_id, source_object_id,
                             fp1y.price price_1yr,
                             fp2y.price price_2yr,
                             fp3y.price price_3yr,
-                            fp5y.price price_5yr--,
-                            --NULL price_10yr
+                            fp5y.price price_5yr,
+                            fp10y.price price_10yr,
+                            fprecent.net_asset_value nav_recent
                           FROM
                             dw.fund f
                             LEFT OUTER JOIN dw.fund_price fpstart ON f.id=fpstart.fund_id AND dw.get_first_fund_price_date(f.id)=fpstart.date
                             LEFT OUTER JOIN dw.fund_price fprecent ON f.id=fprecent.fund_id AND dw.get_last_fund_price_date(f.id)=fprecent.date
-                            LEFT OUTER JOIN dw.fund_price fpytd ON f.id=fpytd.fund_id AND dw.get_prev_working_day(DATE_TRUNC('year', dw.get_last_fund_price_date(f.id))::DATE,'HU')=fpytd.date
-                            LEFT OUTER JOIN dw.fund_price fp1m ON f.id=fp1m.fund_id AND dw.get_prev_working_day((dw.get_last_fund_price_date(f.id)-'1 month'::INTERVAL)::DATE,'HU')=fp1m.date
-                            LEFT OUTER JOIN dw.fund_price fp3m ON f.id=fp3m.fund_id AND dw.get_prev_working_day((dw.get_last_fund_price_date(f.id)-'3 months'::INTERVAL)::DATE,'HU')=fp3m.date
-                            LEFT OUTER JOIN dw.fund_price fp6m ON f.id=fp6m.fund_id AND dw.get_prev_working_day((dw.get_last_fund_price_date(f.id)-'6 months'::INTERVAL)::DATE,'HU')=fp6m.date
-                            LEFT OUTER JOIN dw.fund_price fp1y ON f.id=fp1y.fund_id AND dw.get_prev_working_day((dw.get_last_fund_price_date(f.id)-'1 year'::INTERVAL)::DATE,'HU')=fp1y.date
-                            LEFT OUTER JOIN dw.fund_price fp2y ON f.id=fp2y.fund_id AND dw.get_prev_working_day((dw.get_last_fund_price_date(f.id)-'2 years'::INTERVAL)::DATE,'HU')=fp2y.date
-                            LEFT OUTER JOIN dw.fund_price fp3y ON f.id=fp3y.fund_id AND dw.get_prev_working_day((dw.get_last_fund_price_date(f.id)-'3 years'::INTERVAL)::DATE,'HU')=fp3y.date
-                            LEFT OUTER JOIN dw.fund_price fp5y ON f.id=fp5y.fund_id AND dw.get_prev_working_day((dw.get_last_fund_price_date(f.id)-'5 years'::INTERVAL)::DATE,'HU')=fp5y.date
+                            LEFT OUTER JOIN dw.fund_price fpytd ON f.id=fpytd.fund_id AND dw. get_prev_price_marking_day(DATE_TRUNC('year', dw.get_last_fund_price_date(f.id))::DATE,'HU')=fpytd.date
+                            LEFT OUTER JOIN dw.fund_price fp1m ON f.id=fp1m.fund_id AND dw.get_prev_price_marking_day((dw.get_last_fund_price_date(f.id)-'1 month'::INTERVAL)::DATE,'HU')=fp1m.date
+                            LEFT OUTER JOIN dw.fund_price fp3m ON f.id=fp3m.fund_id AND dw.get_prev_price_marking_day((dw.get_last_fund_price_date(f.id)-'3 months'::INTERVAL)::DATE,'HU')=fp3m.date
+                            LEFT OUTER JOIN dw.fund_price fp6m ON f.id=fp6m.fund_id AND dw.get_prev_price_marking_day((dw.get_last_fund_price_date(f.id)-'6 months'::INTERVAL)::DATE,'HU')=fp6m.date
+                            LEFT OUTER JOIN dw.fund_price fp1y ON f.id=fp1y.fund_id AND dw.get_prev_price_marking_day((dw.get_last_fund_price_date(f.id)-'1 year'::INTERVAL)::DATE,'HU')=fp1y.date
+                            LEFT OUTER JOIN dw.fund_price fp2y ON f.id=fp2y.fund_id AND dw.get_prev_price_marking_day((dw.get_last_fund_price_date(f.id)-'2 years'::INTERVAL)::DATE,'HU')=fp2y.date
+                            LEFT OUTER JOIN dw.fund_price fp3y ON f.id=fp3y.fund_id AND dw.get_prev_price_marking_day((dw.get_last_fund_price_date(f.id)-'3 years'::INTERVAL)::DATE,'HU')=fp3y.date
+                            LEFT OUTER JOIN dw.fund_price fp5y ON f.id=fp5y.fund_id AND dw.get_prev_price_marking_day((dw.get_last_fund_price_date(f.id)-'5 years'::INTERVAL)::DATE,'HU')=fp5y.date
+                            LEFT OUTER JOIN dw.fund_price fp10y ON f.id=fp10y.fund_id AND dw.get_prev_price_marking_day((dw.get_last_fund_price_date(f.id)-'10 years'::INTERVAL)::DATE,'HU')=fp10y.date
                           ;",sou_obj_desc)
 
 execStatus <- psqlQuery(queryString)
