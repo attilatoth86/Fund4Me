@@ -17,37 +17,61 @@ source("db_f.R")
 # SERV init ---------------------------------------------------------------
 
 server <- function(input, output, session) {
-  
-  progress <- Progress$new(session, min=0, max=4)
+
+# SERV progress bar -------------------------------------------------------
+
+  progress <- Progress$new(session, min=0, max=9)
   on.exit(progress$close())
-  
   progress$set(message = 'Fund4Me is loading data in the background.',
                detail = 'You may use the application meanwhile..')
+
+# SERV retrieve dt_dbobj_rep_fund_price_daily_analytics -------------------
+
   progress$set(value = 0) #######################################################################################
   dt_dbobj_rep_fund_price_daily_analytics <- psqlQuery("SELECT * FROM rep.fund_price_daily_analytics")$result
+
+# SERV retrieve dt_dbobj_rep_fund_summary ---------------------------------
+
   progress$set(value = 1) #######################################################################################
-  dt_dbobj_rep_fund_summary <- psqlQuery("SELECT fs.*, f.name, f.short_name
+  dt_dbobj_rep_fund_summary <- psqlQuery("SELECT fs.*, 
+                                          f.name, f.short_name, f.isin, 
+                                          o.name asset_manager_name, 
+                                          c.iso_code currency, 
+                                          c_fundcat.description fund_category
                                           FROM rep.fund_summary fs,
-                                               dw.fund f 
-                                          WHERE fs.fund_id=f.id
+                                               dw.fund f,
+                                               dw.organization o,
+                                               dw.currency c,
+                                               dw.classification c_fundcat
+                                          WHERE fs.fund_id=f.id 
+                                          AND f.fund_manager_id=o.id 
+                                          AND f.currency_id=c.id
+                                          AND f.fund_category_id=c_fundcat.id
                                          ")$result
+
+# SERV calculate cumulative return ----------------------------------------
+
   progress$set(value = 2) #######################################################################################
-  disp_DT_cum_return <- dt_dbobj_rep_fund_summary %>% mutate(return_ytd=round((price_recent/price_ytd-1),digits=4),
-                                                             return_1m=round((price_recent/price_1m-1),digits=4),
-                                                             return_3m=round((price_recent/price_3m-1),digits=4),
-                                                             return_6m=round((price_recent/price_6m-1),digits=4),
-                                                             return_1yr=round((price_recent/price_1yr-1),digits=4),
-                                                             return_2yr=round((price_recent/price_2yr-1),digits=4),
-                                                             return_3yr=round((price_recent/price_3yr-1),digits=4),
-                                                             return_5yr=round((price_recent/price_5yr-1),digits=4)) %>% 
-                                                      select("Fund Name"=short_name, "YTD"=return_ytd, "1M"=return_1m, "3M"=return_3m, "6M"=return_6m,
-                                                             "1Y"=return_1yr, "2Y"=return_2yr, "3Y"=return_3yr, "5Y"=return_5yr)
+  dt_dbobj_rep_fund_summary <- dt_dbobj_rep_fund_summary %>% mutate(return_ytd=round((price_recent/price_ytd-1),digits=4),
+                                                                    return_1m=round((price_recent/price_1m-1),digits=4),
+                                                                    return_3m=round((price_recent/price_3m-1),digits=4),
+                                                                    return_6m=round((price_recent/price_6m-1),digits=4),
+                                                                    return_1yr=round((price_recent/price_1yr-1),digits=4),
+                                                                    return_2yr=round((price_recent/price_2yr-1),digits=4),
+                                                                    return_3yr=round((price_recent/price_3yr-1),digits=4)
+                                                                    )
+
+# SERV calculate annualized return ----------------------------------------
+
   progress$set(value = 3) #######################################################################################
-  disp_DT_ann_return <- dt_dbobj_rep_fund_summary %>% mutate(return_ann_2yr=round(((price_recent/price_2yr)^(365/(as.numeric(date_recent-date_2yr)+1))-1),digits=4),
-                                                             return_ann_3yr=round(((price_recent/price_3yr)^(365/(as.numeric(date_recent-date_3yr)+1))-1),digits=4),
-                                                             return_ann_5yr=round(((price_recent/price_5yr)^(365/(as.numeric(date_recent-date_5yr)+1))-1),digits=4)
-                                                             ) %>%
-                                                      select("Fund Name"=short_name, "2Y"=return_ann_2yr, "3Y"=return_ann_3yr, "5Y"=return_ann_5yr)
+  dt_dbobj_rep_fund_summary <- dt_dbobj_rep_fund_summary %>% mutate(return_ann_2yr=round(((price_recent/price_2yr)^(365/(as.numeric(date_recent-date_2yr)+1))-1),digits=4),
+                                                                    return_ann_3yr=round(((price_recent/price_3yr)^(365/(as.numeric(date_recent-date_3yr)+1))-1),digits=4),
+                                                                    return_ann_5yr=round(((price_recent/price_5yr)^(365/(as.numeric(date_recent-date_5yr)+1))-1),digits=4),
+                                                                    return_ann_10yr=round(((price_recent/price_10yr)^(365/(as.numeric(date_recent-date_10yr)+1))-1),digits=4)
+                                                                    )
+
+# SERV calculate annualized volatility ------------------------------------
+
   progress$set(value = 4) #######################################################################################
   dt_calc_volatility <- data.frame(integer(),double(),double(),double(),double(),double())
   for(i_vol_fundid in dt_dbobj_rep_fund_summary$fund_id){
@@ -63,47 +87,112 @@ server <- function(input, output, session) {
                                            volatility_3yr=val_calc_volatility[3],
                                            volatility_5yr=val_calc_volatility[4],
                                            volatility_10yr=val_calc_volatility[5]
-                                           )
                                 )
+    )
   }
-  disp_DT_volatility <- dt_dbobj_rep_fund_summary %>% left_join(dt_calc_volatility, by="fund_id") %>% select("Fund Name"=short_name, "1Y"=volatility_1yr, "2Y"=volatility_2yr, "3Y"=volatility_3yr, "5Y"=volatility_5yr)
+  dt_dbobj_rep_fund_summary <- dt_dbobj_rep_fund_summary %>% left_join(dt_calc_volatility, by="fund_id")
+
+# SERV prep DT cumulative return ------------------------------------------
+
+  progress$set(value = 5) #######################################################################################
+  disp_DT_cum_return <- dt_dbobj_rep_fund_summary %>% select("Fund Name"=short_name, "YTD"=return_ytd, "1M"=return_1m, "3M"=return_3m, "6M"=return_6m,
+                                                             "1Y"=return_1yr, "2Y"=return_2yr, "3Y"=return_3yr)
+
+# SERV prep DT annualized return ------------------------------------------
+
+  progress$set(value = 6) #######################################################################################
+  disp_DT_ann_return <- dt_dbobj_rep_fund_summary %>% select("Fund Name"=short_name, "2Y"=return_ann_2yr, "3Y"=return_ann_3yr, "5Y"=return_ann_5yr, "10Y"=return_ann_10yr)
+
+# SERV prep DT annualized volatility --------------------------------------
+
+  progress$set(value = 7) #######################################################################################
+  disp_DT_volatility <- dt_dbobj_rep_fund_summary %>% select("Fund Name"=short_name, "1Y"=volatility_1yr, "2Y"=volatility_2yr, "3Y"=volatility_3yr, "5Y"=volatility_5yr, "10Y"=volatility_10yr)
+
+# SERV creating output$ objects --------------------------------------------
+
+  progress$set(value = 8) #######################################################################################
+  output$DT_cum_return <- DT::renderDataTable(DT::datatable(disp_DT_cum_return, extensions = "Responsive", options = list(language = list(info = "_START_ to _END_ of _TOTAL_", paginate = list(previous = "<<", `next` = ">>")), ordering=T, order = list(list(5, 'desc')), pageLength = 5, bLengthChange=F, searching=F, paging=T, scrollX = T), rownames=F) %>% formatPercentage(c("YTD","1M","3M","6M","1Y","2Y","3Y"),2))
+  output$DT_ann_return <- DT::renderDataTable(DT::datatable(disp_DT_ann_return, extensions = "Responsive", options = list(language = list(info = "_START_ to _END_ of _TOTAL_", paginate = list(previous = "<<", `next` = ">>")), ordering=T, order = list(list(1, 'desc')), pageLength = 5, bLengthChange=F, searching=F, paging=T, scrollX = T), rownames=F) %>% formatPercentage(c("2Y","3Y","5Y","10Y"),2))
+  output$DT_volatility <- DT::renderDataTable(DT::datatable(disp_DT_volatility, extensions = "Responsive", options = list(language = list(info = "_START_ to _END_ of _TOTAL_", paginate = list(previous = "<<", `next` = ">>")), ordering=T, order = list(list(4, 'asc')), pageLength = 5, bLengthChange=F, searching=F, paging=T, scrollX = T), rownames=F) %>% formatPercentage(c("1Y","2Y","3Y","5Y","10Y"),2))
   
-  dt_dbobj_rep_fund_summary[dt_dbobj_rep_fund_summary$fund_id==i_vol_fundid,c("date_1yr","date_2yr","date_3yr","date_5yr","date_10yr")][which(!is.na(dt_dbobj_rep_fund_summary[dt_dbobj_rep_fund_summary$fund_id==73660,c("price_1yr","price_2yr","price_3yr","price_5yr","price_10yr")]))]
-
-  output$DT_cum_return <- DT::renderDataTable(DT::datatable(disp_DT_cum_return, extensions = "Responsive", options = list(language = list(info = "_START_ to _END_ of _TOTAL_", paginate = list(previous = "<<", `next` = ">>")), ordering=T, order = list(list(5, 'desc')), pageLength = 5, bLengthChange=F, searching=F, paging=T, scrollX = T), rownames=F) %>% formatPercentage(c("YTD","1M","3M","6M","1Y","2Y","3Y","5Y"),2))
-  output$DT_ann_return <- DT::renderDataTable(DT::datatable(disp_DT_ann_return, extensions = "Responsive", options = list(language = list(info = "_START_ to _END_ of _TOTAL_", paginate = list(previous = "<<", `next` = ">>")), ordering=T, order = list(list(1, 'desc')), pageLength = 5, bLengthChange=F, searching=F, paging=T, scrollX = T), rownames=F) %>% formatPercentage(c("2Y","3Y","5Y"),2))
-  output$DT_volatility <- DT::renderDataTable(DT::datatable(disp_DT_volatility, extensions = "Responsive", options = list(language = list(info = "_START_ to _END_ of _TOTAL_", paginate = list(previous = "<<", `next` = ">>")), ordering=T, order = list(list(4, 'asc')), pageLength = 5, bLengthChange=F, searching=F, paging=T, scrollX = T), rownames=F) %>% formatPercentage(c("1Y","2Y","3Y","5Y"),2))
+  lapply(dt_dbobj_rep_fund_summary$fund_id, function(i_fundid){
+    dt_proc <- dt_dbobj_rep_fund_price_daily_analytics[dt_dbobj_rep_fund_price_daily_analytics$fund_id==i_fundid,]
+    output[[paste0("PLT_price_chg_pct_fund_",i_fundid)]] <- plotly::renderPlotly(plot_ly() %>% add_trace(data=dt_proc, x=~date, y=~price_chg*100, mode="lines") %>% layout(xaxis=list(title=""), yaxis=list(title="Price Change %")))
+  })
   
-  # # Processing funds 1by1
-  lapply(dt_dbobj_rep_fund_summary$fund_id, function(i){
-     dt_proc <- dt_dbobj_rep_fund_price_daily_analytics[dt_dbobj_rep_fund_price_daily_analytics$fund_id==i,]
-     output[[paste0("dyn_plot_out",i)]] <- renderPlotly(
-         plot_ly() %>% add_trace(data=dt_proc, x=~date, y=~price_chg*100, mode="lines") %>%
-           layout(xaxis=list(title=""), yaxis=list(title="Price Change %"))
-     )
-     output[[paste0("dyn_ui_components_out",i)]] <- renderUI({
-                box(title = dt_dbobj_rep_fund_summary[dt_dbobj_rep_fund_summary$fund_id==i,"name"],
-                    width = NULL,
-                    solidHeader = T,
-                    plotlyOutput(paste0("dyn_plot_out",i))
-                 )
-     })
-   }) # end of Processing funds 1by1
-
-
-   output$dyn_ui_block <- renderUI({
-     fluidRow(
-       column(width = 12,
-              lapply(dt_dbobj_rep_fund_summary$fund_id, function(i) {
-                box(
-                  solidHeader = T,
-                  width=6,
-                  uiOutput(paste0('dyn_ui_components_out', i))
-                )
-              })          
-       )
-     )
-   })
+  lapply(dt_dbobj_rep_fund_summary$fund_id, function(i_fundid){
+    output[[paste0("UI_box_summary_fund_",i_fundid)]] <- renderUI({
+      box(width = 6,
+          collapsible = T, collapsed = !(which(dt_dbobj_rep_fund_summary[order(dt_dbobj_rep_fund_summary$nav_recent, decreasing = T),]$fund_id==i_fundid)==1),
+          status = "primary",
+          title = dt_dbobj_rep_fund_summary[dt_dbobj_rep_fund_summary$fund_id==i_fundid,"name"],
+          tags$table(
+            tags$tr(
+              tags$td(style="padding: 1px 3px 1px 1px;vertical-align:top;",tags$b("ISIN")),
+              tags$td(style="padding: 1px 3px 1px 1px;vertical-align:top;",
+                      dt_dbobj_rep_fund_summary[dt_dbobj_rep_fund_summary$fund_id==i_fundid,"isin"])
+            ),
+            tags$tr(
+              tags$td(style="padding: 1px 3px 1px 1px;vertical-align:top;",tags$b("Fund Category")),
+              tags$td(style="padding: 1px 3px 1px 1px;vertical-align:top;",
+                      dt_dbobj_rep_fund_summary[dt_dbobj_rep_fund_summary$fund_id==i_fundid,"fund_category"])
+            ),
+            tags$tr(
+              tags$td(style="padding: 1px 3px 1px 1px;vertical-align:top;",tags$b("Asset Manager")),
+              tags$td(style="padding: 1px 3px 1px 1px;vertical-align:top;",
+                      dt_dbobj_rep_fund_summary[dt_dbobj_rep_fund_summary$fund_id==i_fundid,"asset_manager_name"])
+            ),
+            tags$tr(
+              tags$td(style="padding: 1px 3px 1px 1px;vertical-align:top;",tags$b("Currency")),
+              tags$td(style="padding: 1px 3px 1px 1px;vertical-align:top;",
+                      dt_dbobj_rep_fund_summary[dt_dbobj_rep_fund_summary$fund_id==i_fundid,"currency"])
+            ),
+            tags$tr(
+              tags$td(style="padding: 1px 3px 1px 1px;vertical-align:top;",tags$b("Start Date")),
+              tags$td(style="padding: 1px 3px 1px 1px;vertical-align:top;",
+                      dt_dbobj_rep_fund_summary[dt_dbobj_rep_fund_summary$fund_id==i_fundid,"date_start"])
+            ),
+            tags$tr(
+              tags$td(style="padding: 1px 3px 1px 1px;vertical-align:top;",tags$b("Asset Under Management")),
+              tags$td(style="padding: 1px 3px 1px 1px;vertical-align:top;",
+                      paste(format(dt_dbobj_rep_fund_summary[dt_dbobj_rep_fund_summary$fund_id==i_fundid,"nav_recent"],big.mark=" "),dt_dbobj_rep_fund_summary[dt_dbobj_rep_fund_summary$fund_id==i_fundid,"currency"]))
+            )
+          ),
+          hr(),
+          tags$table(
+            tags$tr(
+              tags$td(style="padding: 1px 50px 1px 1px;vertical-align:top;",tags$b("Key Performance Indicators")),
+              tags$td(style="padding: 1px 5px 1px 5px;text-align:center;vertical-align:top;",tags$b("1Y")),
+              tags$td(style="padding: 1px 5px 1px 5px;text-align:center;vertical-align:top;",tags$b("3Y")),
+              tags$td(style="padding: 1px 5px 1px 5px;text-align:center;vertical-align:top;",tags$b("5Y"))
+            ),
+            tags$tr(
+              tags$td(style="padding: 1px 50px 1px 1px;vertical-align:top;","Annualized Return"),
+              tags$td(style="padding: 1px 5px 1px 5px;text-align:center;vertical-align:top;",sprintf("%.2f%%",100*dt_dbobj_rep_fund_summary[dt_dbobj_rep_fund_summary$fund_id==i_fundid,"return_1yr"])),
+              tags$td(style="padding: 1px 5px 1px 5px;text-align:center;vertical-align:top;",sprintf("%.2f%%",100*dt_dbobj_rep_fund_summary[dt_dbobj_rep_fund_summary$fund_id==i_fundid,"return_ann_3yr"])),
+              tags$td(style="padding: 1px 5px 1px 5px;text-align:center;vertical-align:top;",sprintf("%.2f%%",100*dt_dbobj_rep_fund_summary[dt_dbobj_rep_fund_summary$fund_id==i_fundid,"return_ann_5yr"]))
+            ),
+            tags$tr(
+              tags$td(style="padding: 1px 50px 1px 1px;vertical-align:top;","Annualized Volatility"),
+              tags$td(style="padding: 1px 5px 1px 5px;text-align:center;vertical-align:top;",sprintf("%.2f%%",100*dt_dbobj_rep_fund_summary[dt_dbobj_rep_fund_summary$fund_id==i_fundid,"volatility_1yr"])),
+              tags$td(style="padding: 1px 5px 1px 5px;text-align:center;vertical-align:top;",sprintf("%.2f%%",100*dt_dbobj_rep_fund_summary[dt_dbobj_rep_fund_summary$fund_id==i_fundid,"volatility_3yr"])),
+              tags$td(style="padding: 1px 5px 1px 5px;text-align:center;vertical-align:top;",sprintf("%.2f%%",100*dt_dbobj_rep_fund_summary[dt_dbobj_rep_fund_summary$fund_id==i_fundid,"volatility_5yr"]))
+            )
+          ),
+          plotlyOutput(paste0("PLT_price_chg_pct_fund_",i_fundid))
+      )
+    })
+  })
+  
+  output$UI_block_funds_overview_fund_details <- renderUI({
+    fluidRow(
+             lapply(dt_dbobj_rep_fund_summary[order(dt_dbobj_rep_fund_summary$nav_recent, decreasing = T),]$fund_id, function(i_fundid) {
+                 uiOutput(paste0('UI_box_summary_fund_', i_fundid))
+             })         
+    )
+  })
+  
+  progress$set(value = 9) #######################################################################################
 
 } # SERV function end
 
@@ -113,17 +202,17 @@ ui <- dashboardPage(
 
 # UI dashboardHeader() start ----------------------------------------------
 
-  dashboardHeader(title="Fund4Me", titleWidth = "270px"),
+  dashboardHeader(title="Fund4Me", titleWidth = "250px"),
 
 # UI dashboardSidebar() start ---------------------------------------------
 
-  dashboardSidebar(width = "270px",
+  dashboardSidebar(width = "250px",
                    shinyjs::useShinyjs(),                                 
                    sidebarMenu(
                      menuItem("Home", tabName = "home", icon = icon("home")),
                      menuItem("Funds",tabName = NULL, icon = icon("line-chart"),
-                              menuItem("Return & Risk Summary", tabName = "funds_returnrisksum", icon = icon("angle-right"), badgeLabel = "new", badgeColor = "green"),
-                              menuItem("Price Charts", tabName = "funds_pricecharts", icon = icon("angle-right"))
+                              menuItem("Funds Overview", tabName = "funds_overview", icon = icon("angle-right")),# badgeLabel = "soon", badgeColor = "yellow"),
+                              menuItem("Return & Risk Summary", tabName = "funds_returnrisksum", icon = icon("angle-right"))#, badgeLabel = "new", badgeColor = "green")
                      )
                    ) # sidebarMenu() end
   ),
@@ -135,6 +224,8 @@ ui <- dashboardPage(
 # UI tabItems() start -----------------------------------------------------
 
     tabItems(
+
+# UI tabItem home ---------------------------------------------------------
 
       tabItem(tabName = "home",
               h2("Fund4Me", tags$small("Invest smarter!")),
@@ -148,7 +239,11 @@ ui <- dashboardPage(
                            br(),
                            h1(class="profile-username text-center","Fund4Me"),
                            p(class="text-muted text-center","An experimental data project", shiny::br(),"created by Attila Toth")
-                        )
+                        ),
+                       div(class="callout callout-warning",
+                           h4(icon("exclamation-triangle"), " Warning"),
+                           "Every investment involves risk. It is highly recommended to consult a professional advisor about your personal circumstances before making investment decision."
+                       )
                        ), # column() end
                 column(width = 9,
                        br(),
@@ -164,14 +259,7 @@ ui <- dashboardPage(
                                               tags$li("exploring difficulties around setup and ownership of a",tags$b("cloud"),"based machine,"),
                                               tags$li("creating and managing my ",tags$b("own analytical stack,")),
                                               tags$li(tags$b("demonstrating skills"),"and techniques obtained during my journey with R ecosystem.")
-                                              ),
-                                       br(),
-                                       div(class="alert alert-warning", #"alert alert-danger",
-                                           role="alert",
-                                           h4(icon("exclamation-triangle"), " Warning"),
-                                           tags$b("Every investment involves risk. It is highly recommended to consult a professional advisor about your personal circumstances before making investment decision."),
-                                           tags$b("Historical performance indications and financial market scenarios are no guarantee for current or future performance.")
-                                        )
+                                              )
                                        ), # tabPanel() end
                               tabPanel("The App",
                                        h4("Purpose"),
@@ -193,36 +281,35 @@ ui <- dashboardPage(
                                          )
                                        ), # tabPanel() end
                               tabPanel("Technology",
-                                       br(),
+                                        "Efforts invested into this application intended to create a so-called data project by exploring and exploiting opportunities provided by",tags$b("R ecosystem."),
+                                        "However, in order to bring this product into life multiple components of various technologies must have been coordinated and harmonized.",
+                                        "Given the characteristics and the purposes of the project, the implemented solution depends solely on",tags$b("open source"),"(free) tools and components.",
+                                        "In order to promote the open source movement further and give back something to the community, the entire source code is available on",a("this",href="https://github.com/attilatoth86/Fund4Me",target="_blank"),"public repository.",
+                                        br(),br(),
                                        fluidRow(
-                                                column(width = 2, align="center",
-                                                       a(img(src="rstudioball_logo.png", width="75px"), href="https://www.rstudio.com/", target="_blank")),
-                                                column(width = 2, align="center",
-                                                       a(img(src="shinyoct_logo.png", width="75px"), href="https://shiny.rstudio.com/", target="_blank")),
-                                                column(width = 2, align="center",
-                                                       a(img(src="DO_logo.png", width="75px"), href="https://www.digitalocean.com/", target="_blank")),
-                                                column(width = 2, align="center",
-                                                       a(img(src="ubuntu_logo.png", width="75px"), href="https://www.ubuntu.com/", target="_blank")),
-                                                column(width = 2, align="center",
-                                                       a(img(src="postgresql_logo.png", width="75px"), href="https://www.postgresql.org/", target="_blank")),
-                                                column(width = 2, align="center",
-                                                       a(img(src="github_logo.png", width="75px"), href="https://github.com/", target="_blank"))
-                                              ),
-                                              br(),
-                                              "Efforts invested into this application intended to create a so-called data project by exploring and exploiting opportunities provided by",tags$b("R ecosystem."),
-                                              "However, in order to bring this product into life multiple components of various technologies must have been coordinated and harmonized.",
-                                              "Given the characteristics and the purposes of the project, the implemented solution depends solely on",tags$b("open source"),"(free) tools and components.",
-                                              "In order to promote the open source movement further and give back something to the community, the entire source code is available on",a("this",href="https://github.com/attilatoth86/Fund4Me",target="_blank"),"public repository.",
-                                              br(),br(),
-                                              h4("Highlights"),
-                                              tags$ul(
-                                                tags$li("Fund4Me heavily relies on",a("RStudio",href="https://www.rstudio.com/",target="_blank"),"(both desktop and server editions) as the main development environment."),
-                                                tags$li("User interface has been created with",a("Shiny",href="https://shiny.rstudio.com/",target="_blank"),", a web application framework for R."),
-                                                tags$li(a("Digital Ocean",href="https://www.digitalocean.com/",target="_blank"),", a cloud infrastucture provider, supplies virtual machines (in this particular case",a("Ubuntu",href="https://www.ubuntu.com/",target="_blank"),"14.04) to run and maintain the entire analytics stack."),
-                                                tags$li(a("PostgreSQL",href="https://www.postgresql.org/",target="_blank")," serves as the backbone of the data storage capabilities."),
-                                                tags$li(a("GitHub",href="https://github.com/",target="_blank")," does the version control and source code management for the project.")
-                                              )
-                                           ), # tabPanel() end 
+                                         column(width = 2, align="center",
+                                                a(img(src="rstudioball_logo.png", width="75px"), href="https://www.rstudio.com/", target="_blank")),
+                                         column(width = 2, align="center",
+                                                a(img(src="shinyoct_logo.png", width="75px"), href="https://shiny.rstudio.com/", target="_blank")),
+                                         column(width = 2, align="center",
+                                                a(img(src="DO_logo.png", width="75px"), href="https://www.digitalocean.com/", target="_blank")),
+                                         column(width = 2, align="center",
+                                                a(img(src="ubuntu_logo.png", width="75px"), href="https://www.ubuntu.com/", target="_blank")),
+                                         column(width = 2, align="center",
+                                                a(img(src="postgresql_logo.png", width="75px"), href="https://www.postgresql.org/", target="_blank")),
+                                         column(width = 2, align="center",
+                                                a(img(src="github_logo.png", width="75px"), href="https://github.com/", target="_blank"))
+                                       ),
+                                       br(),
+                                        h4("Highlights"),
+                                        tags$ul(
+                                          tags$li("Fund4Me heavily relies on",a("RStudio",href="https://www.rstudio.com/",target="_blank"),"(both desktop and server editions) as the main development environment."),
+                                          tags$li("User interface has been created with",a("Shiny",href="https://shiny.rstudio.com/",target="_blank"),", a web application framework for R."),
+                                          tags$li(a("Digital Ocean",href="https://www.digitalocean.com/",target="_blank"),", a cloud infrastucture provider, supplies virtual machines (in this particular case",a("Ubuntu",href="https://www.ubuntu.com/",target="_blank"),"14.04) to run and maintain the entire analytics stack."),
+                                          tags$li(a("PostgreSQL",href="https://www.postgresql.org/",target="_blank")," serves as the backbone of the data storage capabilities."),
+                                          tags$li(a("GitHub",href="https://github.com/",target="_blank")," does the version control and source code management for the project.")
+                                        )
+                                      ), # tabPanel() end 
                               tabPanel("Terms of Use",
                                        "By accessing this web site, the pages contained on it, the products, services, information, tools and material contained or described herein (the \"Site\"), you acknowledge your agreement with and understanding of the following terms of use.",
                                        br(),br(),
@@ -233,7 +320,19 @@ ui <- dashboardPage(
                                        "The investment funds mentioned on this Site may only be purchased on the basis of the current sales prospectus and the most recent annual report (or monthly, quarterly report, if these are more recent). The key investor information documentation and the most recent reports are all available from",a("this",href="https://www.aegonalapkezelo.hu/",target="_blank"),"website.",
                                        br(),br(),
                                        h4("Risk Considerations"),
-                                       "Every investment involves risk, especially with regard to fluctuations in value and return. Investments in foreign currencies involve the additional risk that the foreign currency might lose value against the investor's reference currency. Historical performance indications and financial market scenarios are no guarantee for current or future performance. Performance indications do not consider commissions levied at subscription and/or redemption. Furthermore, no guarantee can be given that the performance of the benchmark will be reached or outperformed. Some investment products include investments in Emerging Markets. Emerging Markets are located in countries that possess one or more of the following characteristics: A certain degree of political instability, relatively unpredictable financial markets and economic growth patterns, a financial market that is still at the development stage or a weak economy. Emerging markets investments usually result in higher risks such as political risks, economical risks, credit risks, exchange rate risks, market liquidity risks, legal risks, settlement risks, market risks, shareholder risk and creditor risk. Equities are subject to market forces and hence fluctuations in value which are not entirely predictable. Investment principal on bonds can be eroded depending on sale price or market price. In addition, there are bonds on which investment principal can be eroded due to changes in redemption amounts. Care is required when investing in such instruments. The key risks of real estate funds include limited liquidity in the real estate market, changing mortgage interest rates, subjective valuation of real estate, inherent risks with respect to the construction of buildings and environmental risks (e.g., land contamination). ",
+                                       "Every investment involves risk, especially with regard to fluctuations in value and return.",
+                                       br(),br(),
+                                       "Investments in foreign currencies involve the additional risk that the foreign currency might lose value against the investor's reference currency.",
+                                       br(),br(),
+                                       "Some investment products include investments in Emerging Markets. Emerging Markets are located in countries that possess one or more of the following characteristics: A certain degree of political instability, relatively unpredictable financial markets and economic growth patterns, a financial market that is still at the development stage or a weak economy. Emerging markets investments usually result in higher risks such as political risks, economical risks, credit risks, exchange rate risks, market liquidity risks, legal risks, settlement risks, market risks, shareholder risk and creditor risk.",
+                                       br(),br(),
+                                       "Equities are subject to market forces and hence fluctuations in value which are not entirely predictable.",
+                                       br(),br(),
+                                       "Investment principal on bonds can be eroded depending on sale price or market price. In addition, there are bonds on which investment principal can be eroded due to changes in redemption amounts. Care is required when investing in such instruments.",
+                                       br(),br(),
+                                       "The key risks of real estate funds include limited liquidity in the real estate market, changing mortgage interest rates, subjective valuation of real estate, inherent risks with respect to the construction of buildings and environmental risks (e.g., land contamination).",
+                                       br(),br(),
+                                       "Historical performance indications and financial market scenarios are no guarantee for current or future performance. Performance indications do not consider commissions levied at subscription and/or redemption. Furthermore, no guarantee can be given that the performance of the benchmark will be reached or outperformed.",
                                        br(),br(),
                                        h4("Licence"),
                                        a(href="http://creativecommons.org/licenses/by-sa/4.0/",target="_blank",img(style="border-width:0",src="https://i.creativecommons.org/l/by-sa/4.0/80x15.png")),
@@ -244,48 +343,59 @@ ui <- dashboardPage(
                        ) # column() end
               ) # fluidRow() end
       ),
+
+# UI tabItem funds overview -----------------------------------------------
+
+      tabItem(tabName = "funds_overview",
+              h2("Funds", tags$small("Overview")),
+              uiOutput("UI_block_funds_overview_fund_details")
+              ),
+
+# UI tabItem return & risk summary ----------------------------------------
+
       tabItem(tabName = "funds_returnrisksum",
               h2("Funds", tags$small("Return & Risk Summary")),
               fluidRow(
-                column(width = 8,
-                       box(status = "success",
-                           solidHeader = T,
+                column(width = 12,
+                       box(width = NULL,
+                           title = div(icon("info-circle"), "Info"),
+                           "Below you may find summarized information about historical performances of mutual funds being processed.",
+                           "Each box represents a crucial performance metric (by fund along the most relevant time buckets) worth considering for investment decisions.",
+                           "A default sorting is applied on each table which you may interactively alter by clicking on column headers to reorder the particular table.",
+                           footer = p(class="text-red",
+                                      icon("exclamation-triangle"), "Warning!",
+                                      "Historical performance indications are no guarantee for current or future performance. Performance indications do not consider commissions levied at subscription and/or redemption.",
+                                      "It is highly recommended to consult a professional advisor about your personal circumstances before making investment decision.")
+                           )
+                )
+              ),
+              fluidRow(
+                column(width = 7,
+                       box(status = "primary",
+                           solidHeader = F,
                            width = NULL,
-                           title = "Cummulative Return",
+                           title = div(icon("line-chart"), " Cumulative Return"),
                            DT::dataTableOutput("DT_cum_return")
                         )
                        ),
-                column(width = 4,
-                       box(status = "success",
-                           solidHeader = T,
+                column(width = 5,
+                       box(status = "primary",
+                           solidHeader = F,
                            width = NULL,
-                           title = "Annualized Return",
+                           title = div(icon("line-chart"), " Annualized Return"),
                            DT::dataTableOutput("DT_ann_return")
                         )
                        )
               ),
               fluidRow(
-                column(width = 12,
-                       div(class="alert alert-warning", #"alert alert-danger",
-                           role="alert",
-                           h4(icon("exclamation-triangle"), " Warning"),
-                           tags$b("Historical performance indications are no guarantee for current or future performance. Performance indications do not consider commissions levied at subscription and/or redemption.")
-                       )
-                )
-              ),
-              fluidRow(
                 column(width = 6,
                        box(status = "danger",
-                           solidHeader = T,
+                           solidHeader = F,
                            width = NULL,
-                           title = "Annualized Volatility",
+                           title = div(icon("random"), " Annualized Volatility"),
                            DT::dataTableOutput("DT_volatility"))
                 )
               )
-      ),
-      tabItem(tabName = "funds_pricecharts",
-              h2("Funds", tags$small("Historical Price Charts")),
-              fluidRow(uiOutput("dyn_ui_block"))
       )
 
       ) # tabItems() end
