@@ -11,7 +11,6 @@ library(dplyr)
 
 # Init source external resources ------------------------------------------
 
-#source("f.R")
 source("db_f.R")
 
 # SERV init ---------------------------------------------------------------
@@ -20,7 +19,7 @@ server <- function(input, output, session) {
 
 # SERV progress bar -------------------------------------------------------
 
-  progress <- Progress$new(session, min=0, max=9)
+  progress <- Progress$new(session, min=0, max=11)
   on.exit(progress$close())
   progress$set(message = 'Fund4Me is loading data in the background.',
                detail = 'You may use the application meanwhile..')
@@ -92,28 +91,59 @@ server <- function(input, output, session) {
   }
   dt_dbobj_rep_fund_summary <- dt_dbobj_rep_fund_summary %>% left_join(dt_calc_volatility, by="fund_id")
 
-# SERV prep DT cumulative return ------------------------------------------
+# SERV calc drawndowns ----------------------------------------------------
 
   progress$set(value = 5) #######################################################################################
+  dt_calc_drawdown <- data.frame(integer(),as.Date(character()),as.Date(character()),as.Date(character()),double(),integer(),integer(),integer())
+  for(i_dd_fundid in dt_dbobj_rep_fund_summary$fund_id){
+    dt_proc <- dt_dbobj_rep_fund_price_daily_analytics[dt_dbobj_rep_fund_price_daily_analytics$fund_id==i_dd_fundid,c("date","return")]
+    rownames(dt_proc) <- dt_proc$date
+    dt_proc$date <- NULL
+    dt_out <- data.frame(fund_id=i_dd_fundid,table.Drawdowns(dt_proc)[1,])
+    dt_calc_drawdown <- rbind(dt_calc_drawdown,
+                              data.frame(fund_id=dt_out[1,1],
+                                         drawdown_from=dt_out[1,2],
+                                         drawdown_trough=dt_out[1,3],
+                                         drawdown_to=dt_out[1,4],
+                                         drawdown_depth=dt_out[1,5],
+                                         drawdown_length=dt_out[1,6],
+                                         drawdown_totrough=dt_out[1,7],
+                                         drawdown_recovery=dt_out[1,8])
+                              )
+  }
+  
+  dt_dbobj_rep_fund_summary <- dt_dbobj_rep_fund_summary %>% left_join(dt_calc_drawdown, by="fund_id")
+
+# SERV prep DT cumulative return ------------------------------------------
+
+  progress$set(value = 6) #######################################################################################
   disp_DT_cum_return <- dt_dbobj_rep_fund_summary %>% select("Fund Name"=short_name, "YTD"=return_ytd, "1M"=return_1m, "3M"=return_3m, "6M"=return_6m,
                                                              "1Y"=return_1yr, "2Y"=return_2yr, "3Y"=return_3yr)
 
 # SERV prep DT annualized return ------------------------------------------
 
-  progress$set(value = 6) #######################################################################################
+  progress$set(value = 7) #######################################################################################
   disp_DT_ann_return <- dt_dbobj_rep_fund_summary %>% select("Fund Name"=short_name, "2Y"=return_ann_2yr, "3Y"=return_ann_3yr, "5Y"=return_ann_5yr, "10Y"=return_ann_10yr)
 
 # SERV prep DT annualized volatility --------------------------------------
 
-  progress$set(value = 7) #######################################################################################
+  progress$set(value = 8) #######################################################################################
   disp_DT_volatility <- dt_dbobj_rep_fund_summary %>% select("Fund Name"=short_name, "1Y"=volatility_1yr, "2Y"=volatility_2yr, "3Y"=volatility_3yr, "5Y"=volatility_5yr, "10Y"=volatility_10yr)
+
+# SERV prep DT drawdown ---------------------------------------------------
+
+  progress$set(value = 9) #######################################################################################
+  disp_DT_drawdown <- dt_dbobj_rep_fund_summary %>% select("Fund Name"=short_name, "Depth"=drawdown_depth, "Peak"=drawdown_from, "Trough"=drawdown_trough)
+  disp_DT_drawdown$`Peak` <- as.character(disp_DT_drawdown$`Peak`)
+  disp_DT_drawdown$`Trough` <- as.character(disp_DT_drawdown$`Trough`)
 
 # SERV creating output$ objects --------------------------------------------
 
-  progress$set(value = 8) #######################################################################################
+  progress$set(value = 10) #######################################################################################
   output$DT_cum_return <- DT::renderDataTable(DT::datatable(disp_DT_cum_return, extensions = "Responsive", options = list(language = list(info = "_START_ to _END_ of _TOTAL_", paginate = list(previous = "<<", `next` = ">>")), ordering=T, order = list(list(5, 'desc')), pageLength = 5, bLengthChange=F, searching=F, paging=T, scrollX = T), rownames=F) %>% formatPercentage(c("YTD","1M","3M","6M","1Y","2Y","3Y"),2))
   output$DT_ann_return <- DT::renderDataTable(DT::datatable(disp_DT_ann_return, extensions = "Responsive", options = list(language = list(info = "_START_ to _END_ of _TOTAL_", paginate = list(previous = "<<", `next` = ">>")), ordering=T, order = list(list(1, 'desc')), pageLength = 5, bLengthChange=F, searching=F, paging=T, scrollX = T), rownames=F) %>% formatPercentage(c("2Y","3Y","5Y","10Y"),2))
   output$DT_volatility <- DT::renderDataTable(DT::datatable(disp_DT_volatility, extensions = "Responsive", options = list(language = list(info = "_START_ to _END_ of _TOTAL_", paginate = list(previous = "<<", `next` = ">>")), ordering=T, order = list(list(4, 'asc')), pageLength = 5, bLengthChange=F, searching=F, paging=T, scrollX = T), rownames=F) %>% formatPercentage(c("1Y","2Y","3Y","5Y","10Y"),2))
+  output$DT_drawdown <- DT::renderDataTable(DT::datatable(disp_DT_drawdown, extensions = "Responsive", options = list(language = list(info = "_START_ to _END_ of _TOTAL_", paginate = list(previous = "<<", `next` = ">>")), ordering=T, order = list(list(1, 'desc')), pageLength = 5, bLengthChange=F, searching=F, paging=T, scrollX = T), rownames=F) %>% formatPercentage(c("Depth"),2))
   
   lapply(dt_dbobj_rep_fund_summary$fund_id, function(i_fundid){
     dt_proc <- dt_dbobj_rep_fund_price_daily_analytics[dt_dbobj_rep_fund_price_daily_analytics$fund_id==i_fundid,]
@@ -161,7 +191,7 @@ server <- function(input, output, session) {
           hr(),
           tags$table(
             tags$tr(
-              tags$td(style="padding: 1px 50px 1px 1px;vertical-align:top;",tags$b("Key Performance Indicators")),
+              tags$td(style="padding: 1px 50px 1px 1px;vertical-align:top;",tags$b("Key Risk & Performance Indicators")),
               tags$td(style="padding: 1px 5px 1px 5px;text-align:center;vertical-align:top;",tags$b("1Y")),
               tags$td(style="padding: 1px 5px 1px 5px;text-align:center;vertical-align:top;",tags$b("3Y")),
               tags$td(style="padding: 1px 5px 1px 5px;text-align:center;vertical-align:top;",tags$b("5Y"))
@@ -177,20 +207,31 @@ server <- function(input, output, session) {
               tags$td(style="padding: 1px 5px 1px 5px;text-align:center;vertical-align:top;",sprintf("%.2f%%",100*dt_dbobj_rep_fund_summary[dt_dbobj_rep_fund_summary$fund_id==i_fundid,"volatility_1yr"])),
               tags$td(style="padding: 1px 5px 1px 5px;text-align:center;vertical-align:top;",sprintf("%.2f%%",100*dt_dbobj_rep_fund_summary[dt_dbobj_rep_fund_summary$fund_id==i_fundid,"volatility_3yr"])),
               tags$td(style="padding: 1px 5px 1px 5px;text-align:center;vertical-align:top;",sprintf("%.2f%%",100*dt_dbobj_rep_fund_summary[dt_dbobj_rep_fund_summary$fund_id==i_fundid,"volatility_5yr"]))
+            ),
+            tags$tr(
+              tags$td(style="padding: 1px 50px 1px 1px;vertical-align:top;",""),
+              tags$td(style="padding: 1px 5px 1px 5px;text-align:center;vertical-align:top;",""),
+              tags$td(style="padding: 1px 5px 1px 5px;text-align:center;vertical-align:top;",""),
+              tags$td(style="padding: 1px 5px 1px 5px;text-align:center;vertical-align:top;","")
+            ),
+            tags$tr(
+              tags$td(style="padding: 1px 50px 1px 1px;vertical-align:top;",""),
+              tags$td(style="padding: 1px 5px 1px 5px;text-align:center;vertical-align:top;",tags$b("Peak")),
+              tags$td(style="padding: 1px 5px 1px 5px;text-align:center;vertical-align:top;",tags$b("Trough")),
+              tags$td(style="padding: 1px 5px 1px 5px;text-align:center;vertical-align:top;",tags$b("Decline"))
+            ),
+            tags$tr(
+              tags$td(style="padding: 1px 50px 1px 1px;vertical-align:top;","Most Severe Drawdown"),
+              tags$td(style="padding: 1px 5px 1px 5px;text-align:center;vertical-align:top;",dt_dbobj_rep_fund_summary[dt_dbobj_rep_fund_summary$fund_id==i_fundid,"drawdown_from"]),
+              tags$td(style="padding: 1px 5px 1px 5px;text-align:center;vertical-align:top;",dt_dbobj_rep_fund_summary[dt_dbobj_rep_fund_summary$fund_id==i_fundid,"drawdown_trough"]),
+              tags$td(style="padding: 1px 5px 1px 5px;text-align:center;vertical-align:top;",sprintf("%.2f%%",100*dt_dbobj_rep_fund_summary[dt_dbobj_rep_fund_summary$fund_id==i_fundid,"drawdown_depth"]))
             )
           ),
           plotlyOutput(paste0("PLT_price_chg_pct_fund_",i_fundid))
       )
     })
   })
-  
-  # output$UI_block_funds_overview_fund_details <- renderUI({
-  #   fluidRow(
-  #            lapply(dt_dbobj_rep_fund_summary[order(dt_dbobj_rep_fund_summary$nav_recent, decreasing = T),]$fund_id, function(i_fundid) {
-  #                uiOutput(paste0('UI_box_summary_fund_', i_fundid))
-  #            })         
-  #   )
-  # })
+
   output$UI_block_funds_overview_fund_details_10bnplus <- renderUI({
     fluidRow(
       lapply((arrange(dt_dbobj_rep_fund_summary,desc(nav_recent)) %>% filter(nav_recent>10000000000))$fund_id, function(i_fundid) {
@@ -220,7 +261,7 @@ server <- function(input, output, session) {
     )
   })
   
-  progress$set(value = 9) #######################################################################################
+  progress$set(value = 11) #######################################################################################
 
 } # SERV function end
 
@@ -457,6 +498,13 @@ ui <- dashboardPage(
                            width = NULL,
                            title = tags$b(div(icon("random"), " Annualized Volatility")),
                            DT::dataTableOutput("DT_volatility"))
+                ),
+                column(width = 6,
+                       box(status = "danger",
+                           solidHeader = F,
+                           width = NULL,
+                           title = tags$b(div(icon("random"), " Most Severe Drawdown")),
+                           DT::dataTableOutput("DT_drawdown"))
                 )
               )
       )
