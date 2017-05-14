@@ -184,11 +184,39 @@ server <- function(input, output, session) {
     })
   })
   
-  output$UI_block_funds_overview_fund_details <- renderUI({
+  # output$UI_block_funds_overview_fund_details <- renderUI({
+  #   fluidRow(
+  #            lapply(dt_dbobj_rep_fund_summary[order(dt_dbobj_rep_fund_summary$nav_recent, decreasing = T),]$fund_id, function(i_fundid) {
+  #                uiOutput(paste0('UI_box_summary_fund_', i_fundid))
+  #            })         
+  #   )
+  # })
+  output$UI_block_funds_overview_fund_details_10bnplus <- renderUI({
     fluidRow(
-             lapply(dt_dbobj_rep_fund_summary[order(dt_dbobj_rep_fund_summary$nav_recent, decreasing = T),]$fund_id, function(i_fundid) {
-                 uiOutput(paste0('UI_box_summary_fund_', i_fundid))
-             })         
+      lapply((arrange(dt_dbobj_rep_fund_summary,desc(nav_recent)) %>% filter(nav_recent>10000000000))$fund_id, function(i_fundid) {
+        uiOutput(paste0('UI_box_summary_fund_', i_fundid))
+      })         
+    )
+  })
+  output$UI_block_funds_overview_fund_details_5_10bn <- renderUI({
+    fluidRow(
+      lapply((arrange(dt_dbobj_rep_fund_summary,desc(nav_recent)) %>% filter(nav_recent>5000000000 & nav_recent<=10000000000))$fund_id, function(i_fundid) {
+        uiOutput(paste0('UI_box_summary_fund_', i_fundid))
+      })         
+    )
+  })
+  output$UI_block_funds_overview_fund_details_1_5bn <- renderUI({
+    fluidRow(
+      lapply((arrange(dt_dbobj_rep_fund_summary,desc(nav_recent)) %>% filter(nav_recent>1000000000 & nav_recent<=5000000000))$fund_id, function(i_fundid) {
+        uiOutput(paste0('UI_box_summary_fund_', i_fundid))
+      })         
+    )
+  })
+  output$UI_block_funds_overview_fund_details_1bnminus <- renderUI({
+    fluidRow(
+      lapply((arrange(dt_dbobj_rep_fund_summary,desc(nav_recent)) %>% filter(nav_recent<=1000000000))$fund_id, function(i_fundid) {
+        uiOutput(paste0('UI_box_summary_fund_', i_fundid))
+      })         
     )
   })
   
@@ -310,7 +338,7 @@ ui <- dashboardPage(
                                           tags$li(a("GitHub",href="https://github.com/",target="_blank")," does the version control and source code management for the project.")
                                         )
                                       ), # tabPanel() end 
-                              tabPanel("Terms of Use",
+                              tabPanel(title = "Terms of Use",
                                        "By accessing this web site, the pages contained on it, the products, services, information, tools and material contained or described herein (the \"Site\"), you acknowledge your agreement with and understanding of the following terms of use.",
                                        br(),br(),
                                        h4("Information supplied"),
@@ -348,7 +376,32 @@ ui <- dashboardPage(
 
       tabItem(tabName = "funds_overview",
               h2("Funds", tags$small("Overview")),
-              uiOutput("UI_block_funds_overview_fund_details")
+              fluidRow(
+                column(width = 12,
+                       box(width = NULL,
+                           tags$table(
+                             tags$col(width="75"),
+                             tags$tr(
+                               tags$td(h4(icon("info-circle"), "Info")),
+                               tags$td("This page provides high-level, summarized information about each and every fund being processed.",
+                                       "Funds' infoboxes are collapsible and sorted by their most recent market share (net asset value).")
+                             )
+                           )
+                       )
+                )
+              ),
+              h4("Funds with 10+ BN HUF Assets Under Management"),
+              uiOutput("UI_block_funds_overview_fund_details_10bnplus"),
+              hr(),
+              h4("Funds with 5 to 10 BN HUF Assets Under Management"),
+              uiOutput("UI_block_funds_overview_fund_details_5_10bn"),
+              hr(),
+              h4("Funds with 1 to 5 BN HUF Assets Under Management"),
+              uiOutput("UI_block_funds_overview_fund_details_1_5bn"),
+              hr(),
+              h4("Funds with 1- BN HUF Assets Under Management"),
+              uiOutput("UI_block_funds_overview_fund_details_1bnminus"),
+              hr()
               ),
 
 # UI tabItem return & risk summary ----------------------------------------
@@ -358,15 +411,25 @@ ui <- dashboardPage(
               fluidRow(
                 column(width = 12,
                        box(width = NULL,
-                           title = div(icon("info-circle"), "Info"),
-                           "Below you may find summarized information about historical performances of mutual funds being processed.",
-                           "Each box represents a crucial performance metric (by fund along the most relevant time buckets) worth considering for investment decisions.",
-                           "A default sorting is applied on each table which you may interactively alter by clicking on column headers to reorder the particular table.",
-                           footer = p(class="text-red",
-                                      icon("exclamation-triangle"), "Warning!",
-                                      "Historical performance indications are no guarantee for current or future performance. Performance indications do not consider commissions levied at subscription and/or redemption.",
-                                      "It is highly recommended to consult a professional advisor about your personal circumstances before making investment decision.")
-                           )
+                           tags$table(
+                             tags$col(width="100"),
+                             tags$tr(
+                               tags$td(h4(icon("info-circle"), "Info")),
+                               tags$td("Below you may find summarized information about historical performances of mutual funds being processed.",
+                                       "Each box represents a crucial performance metric (by fund along the most relevant time buckets) worth considering for investment decisions.",
+                                       "A default sorting is applied on each table which you may interactively alter by clicking on column headers to reorder the particular table.")
+                             )
+                           ),
+                           footer = tags$table(
+                                               tags$col(width="100"),
+                                               tags$tr(
+                                                 tags$td(h4(class="text-red", icon("exclamation-triangle"), "Warning")),
+                                                 tags$td(p(class="text-red","Historical performance indications are no guarantee for current or future performance. Performance indications do not consider commissions levied at subscription and/or redemption.",
+                                                         "It is highly recommended to consult a professional advisor about your personal circumstances before making investment decision."))
+                                               )
+                                             )
+                             
+                       )
                 )
               ),
               fluidRow(
@@ -374,7 +437,7 @@ ui <- dashboardPage(
                        box(status = "primary",
                            solidHeader = F,
                            width = NULL,
-                           title = div(icon("line-chart"), " Cumulative Return"),
+                           title = tags$b(div(icon("line-chart"), " Cumulative Return")),
                            DT::dataTableOutput("DT_cum_return")
                         )
                        ),
@@ -382,7 +445,7 @@ ui <- dashboardPage(
                        box(status = "primary",
                            solidHeader = F,
                            width = NULL,
-                           title = div(icon("line-chart"), " Annualized Return"),
+                           title = tags$b(div(icon("line-chart"), " Annualized Return")),
                            DT::dataTableOutput("DT_ann_return")
                         )
                        )
@@ -392,7 +455,7 @@ ui <- dashboardPage(
                        box(status = "danger",
                            solidHeader = F,
                            width = NULL,
-                           title = div(icon("random"), " Annualized Volatility"),
+                           title = tags$b(div(icon("random"), " Annualized Volatility")),
                            DT::dataTableOutput("DT_volatility"))
                 )
               )
