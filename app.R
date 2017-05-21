@@ -19,7 +19,7 @@ server <- function(input, output, session) {
 
 # SERV progress bar -------------------------------------------------------
 
-  progress <- Progress$new(session, min=0, max=11)
+  progress <- Progress$new(session, min=0, max=7)
   on.exit(progress$close())
   progress$set(message = 'Fund4Me is loading data in the background.',
                detail = 'You may use the application meanwhile..')
@@ -32,114 +32,37 @@ server <- function(input, output, session) {
 # SERV retrieve dt_dbobj_rep_fund_summary ---------------------------------
 
   progress$set(value = 1) #######################################################################################
-  dt_dbobj_rep_fund_summary <- psqlQuery("SELECT fs.*, 
-                                          f.name, f.short_name, f.isin, 
-                                          o.name asset_manager_name, 
-                                          c.iso_code currency, 
-                                          c_fundcat.description fund_category
-                                          FROM rep.fund_summary fs,
-                                               dw.fund f,
-                                               dw.organization o,
-                                               dw.currency c,
-                                               dw.classification c_fundcat
-                                          WHERE fs.fund_id=f.id 
-                                          AND f.fund_manager_id=o.id 
-                                          AND f.currency_id=c.id
-                                          AND f.fund_category_id=c_fundcat.id
-                                         ")$result
-
-# SERV calculate cumulative return ----------------------------------------
-
-  progress$set(value = 2) #######################################################################################
-  dt_dbobj_rep_fund_summary <- dt_dbobj_rep_fund_summary %>% mutate(return_ytd=round((price_recent/price_ytd-1),digits=4),
-                                                                    return_1m=round((price_recent/price_1m-1),digits=4),
-                                                                    return_3m=round((price_recent/price_3m-1),digits=4),
-                                                                    return_6m=round((price_recent/price_6m-1),digits=4),
-                                                                    return_1yr=round((price_recent/price_1yr-1),digits=4),
-                                                                    return_2yr=round((price_recent/price_2yr-1),digits=4),
-                                                                    return_3yr=round((price_recent/price_3yr-1),digits=4)
-                                                                    )
-
-# SERV calculate annualized return ----------------------------------------
-
-  progress$set(value = 3) #######################################################################################
-  dt_dbobj_rep_fund_summary <- dt_dbobj_rep_fund_summary %>% mutate(return_ann_2yr=round(((price_recent/price_2yr)^(365/(as.numeric(date_recent-date_2yr)+1))-1),digits=4),
-                                                                    return_ann_3yr=round(((price_recent/price_3yr)^(365/(as.numeric(date_recent-date_3yr)+1))-1),digits=4),
-                                                                    return_ann_5yr=round(((price_recent/price_5yr)^(365/(as.numeric(date_recent-date_5yr)+1))-1),digits=4),
-                                                                    return_ann_10yr=round(((price_recent/price_10yr)^(365/(as.numeric(date_recent-date_10yr)+1))-1),digits=4)
-                                                                    )
-
-# SERV calculate annualized volatility ------------------------------------
-
-  progress$set(value = 4) #######################################################################################
-  dt_calc_volatility <- data.frame(integer(),double(),double(),double(),double(),double())
-  for(i_vol_fundid in dt_dbobj_rep_fund_summary$fund_id){
-    val_calc_volatility <- vector()
-    for(i_vol_date in dt_dbobj_rep_fund_summary[dt_dbobj_rep_fund_summary$fund_id==i_vol_fundid,c("date_1yr","date_2yr","date_3yr","date_5yr","date_10yr")][which(!is.na(dt_dbobj_rep_fund_summary[dt_dbobj_rep_fund_summary$fund_id==i_vol_fundid,c("price_1yr","price_2yr","price_3yr","price_5yr","price_10yr")]))]){
-      dt_proc <- dt_dbobj_rep_fund_price_daily_analytics[dt_dbobj_rep_fund_price_daily_analytics$fund_id==i_vol_fundid & dt_dbobj_rep_fund_price_daily_analytics$date>=i_vol_date & is.na(dt_dbobj_rep_fund_price_daily_analytics$return)==F,"return"]
-      val_calc_volatility <- c(val_calc_volatility,StdDev.annualized(dt_proc,scale=252))
-    }
-    dt_calc_volatility <- rbind(dt_calc_volatility,
-                                data.frame(fund_id=i_vol_fundid,
-                                           volatility_1yr=val_calc_volatility[1],
-                                           volatility_2yr=val_calc_volatility[2],
-                                           volatility_3yr=val_calc_volatility[3],
-                                           volatility_5yr=val_calc_volatility[4],
-                                           volatility_10yr=val_calc_volatility[5]
-                                )
-    )
-  }
-  dt_dbobj_rep_fund_summary <- dt_dbobj_rep_fund_summary %>% left_join(dt_calc_volatility, by="fund_id")
-
-# SERV calc drawndowns ----------------------------------------------------
-
-  progress$set(value = 5) #######################################################################################
-  dt_calc_drawdown <- data.frame(integer(),as.Date(character()),as.Date(character()),as.Date(character()),double(),integer(),integer(),integer())
-  for(i_dd_fundid in dt_dbobj_rep_fund_summary$fund_id){
-    dt_proc <- dt_dbobj_rep_fund_price_daily_analytics[dt_dbobj_rep_fund_price_daily_analytics$fund_id==i_dd_fundid,c("date","return")]
-    rownames(dt_proc) <- dt_proc$date
-    dt_proc$date <- NULL
-    dt_out <- data.frame(fund_id=i_dd_fundid,table.Drawdowns(dt_proc)[1,])
-    dt_calc_drawdown <- rbind(dt_calc_drawdown,
-                              data.frame(fund_id=dt_out[1,1],
-                                         drawdown_from=dt_out[1,2],
-                                         drawdown_trough=dt_out[1,3],
-                                         drawdown_to=dt_out[1,4],
-                                         drawdown_depth=dt_out[1,5],
-                                         drawdown_length=dt_out[1,6],
-                                         drawdown_totrough=dt_out[1,7],
-                                         drawdown_recovery=dt_out[1,8])
-                              )
-  }
-  
-  dt_dbobj_rep_fund_summary <- dt_dbobj_rep_fund_summary %>% left_join(dt_calc_drawdown, by="fund_id")
+  dt_dbobj_rep_fund_summary <- readRDS(paste0("/home/ati/Fund4Me/RDS_dt_dbobj_rep_fund_summary/",
+                                              list.files(path = "/home/ati/Fund4Me/RDS_dt_dbobj_rep_fund_summary/", pattern = ".rds", recursive = F)[1]
+                                              )
+                                      )
 
 # SERV prep DT cumulative return ------------------------------------------
 
-  progress$set(value = 6) #######################################################################################
+  progress$set(value = 2) #######################################################################################
   disp_DT_cum_return <- dt_dbobj_rep_fund_summary %>% select("Fund Name"=short_name, "YTD"=return_ytd, "1M"=return_1m, "3M"=return_3m, "6M"=return_6m,
                                                              "1Y"=return_1yr, "2Y"=return_2yr, "3Y"=return_3yr)
 
 # SERV prep DT annualized return ------------------------------------------
 
-  progress$set(value = 7) #######################################################################################
+  progress$set(value = 3) #######################################################################################
   disp_DT_ann_return <- dt_dbobj_rep_fund_summary %>% select("Fund Name"=short_name, "2Y"=return_ann_2yr, "3Y"=return_ann_3yr, "5Y"=return_ann_5yr, "10Y"=return_ann_10yr)
 
 # SERV prep DT annualized volatility --------------------------------------
 
-  progress$set(value = 8) #######################################################################################
+  progress$set(value = 4) #######################################################################################
   disp_DT_volatility <- dt_dbobj_rep_fund_summary %>% select("Fund Name"=short_name, "1Y"=volatility_1yr, "2Y"=volatility_2yr, "3Y"=volatility_3yr, "5Y"=volatility_5yr, "10Y"=volatility_10yr)
 
 # SERV prep DT drawdown ---------------------------------------------------
 
-  progress$set(value = 9) #######################################################################################
+  progress$set(value = 5) #######################################################################################
   disp_DT_drawdown <- dt_dbobj_rep_fund_summary %>% select("Fund Name"=short_name, "Depth"=drawdown_depth, "Peak"=drawdown_from, "Trough"=drawdown_trough)
   disp_DT_drawdown$`Peak` <- as.character(disp_DT_drawdown$`Peak`)
   disp_DT_drawdown$`Trough` <- as.character(disp_DT_drawdown$`Trough`)
 
 # SERV creating output$ objects --------------------------------------------
 
-  progress$set(value = 10) #######################################################################################
+  progress$set(value = 6) #######################################################################################
   output$DT_cum_return <- DT::renderDataTable(DT::datatable(disp_DT_cum_return, extensions = "Responsive", options = list(language = list(info = "_START_ to _END_ of _TOTAL_", paginate = list(previous = "<<", `next` = ">>")), ordering=T, order = list(list(5, 'desc')), pageLength = 5, bLengthChange=F, searching=F, paging=T, scrollX = T), rownames=F) %>% formatPercentage(c("YTD","1M","3M","6M","1Y","2Y","3Y"),2))
   output$DT_ann_return <- DT::renderDataTable(DT::datatable(disp_DT_ann_return, extensions = "Responsive", options = list(language = list(info = "_START_ to _END_ of _TOTAL_", paginate = list(previous = "<<", `next` = ">>")), ordering=T, order = list(list(1, 'desc')), pageLength = 5, bLengthChange=F, searching=F, paging=T, scrollX = T), rownames=F) %>% formatPercentage(c("2Y","3Y","5Y","10Y"),2))
   output$DT_volatility <- DT::renderDataTable(DT::datatable(disp_DT_volatility, extensions = "Responsive", options = list(language = list(info = "_START_ to _END_ of _TOTAL_", paginate = list(previous = "<<", `next` = ">>")), ordering=T, order = list(list(4, 'asc')), pageLength = 5, bLengthChange=F, searching=F, paging=T, scrollX = T), rownames=F) %>% formatPercentage(c("1Y","2Y","3Y","5Y","10Y"),2))
@@ -261,7 +184,7 @@ server <- function(input, output, session) {
     )
   })
   
-  progress$set(value = 11) #######################################################################################
+  progress$set(value = 7) #######################################################################################
 
 } # SERV function end
 
@@ -479,6 +402,7 @@ ui <- dashboardPage(
                            solidHeader = F,
                            width = NULL,
                            title = tags$b(div(icon("line-chart"), " Cumulative Return")),
+                           p("Cumulative return is the aggregate amount an investment in a fund has gained or lost over time, independent of the period of time involved."),
                            DT::dataTableOutput("DT_cum_return")
                         )
                        ),
@@ -487,6 +411,7 @@ ui <- dashboardPage(
                            solidHeader = F,
                            width = NULL,
                            title = tags$b(div(icon("line-chart"), " Annualized Return")),
+                           p("Annualized return is the geometric average amount of money earned by a fund each year over a given time period. Calculated as a geometric average to show what an investor would earn over a period of time if the annual return was compounded."),
                            DT::dataTableOutput("DT_ann_return")
                         )
                        )
@@ -497,6 +422,7 @@ ui <- dashboardPage(
                            solidHeader = F,
                            width = NULL,
                            title = tags$b(div(icon("random"), " Annualized Volatility")),
+                           p("Volatility indicates the uncertainty (risk) about the changes in a funds' value. A higher volatility means that funds' value can potentially be spread out over a larger range of values meaning an increased likelihood of dramatical price changes over a short time period in either direction. A lower volatility means a smaller chance of significant value fluctuation but changes in price at a steadier pace over a period of time."),
                            DT::dataTableOutput("DT_volatility"))
                 ),
                 column(width = 6,
@@ -504,6 +430,7 @@ ui <- dashboardPage(
                            solidHeader = F,
                            width = NULL,
                            title = tags$b(div(icon("random"), " Most Severe Drawdown")),
+                           p("Most severe drawdown is the largest peak-to-trough decline during the lifetime of a fund, quoted as the percentage between the peak and the subsequent trough."),
                            DT::dataTableOutput("DT_drawdown"))
                 )
               )
