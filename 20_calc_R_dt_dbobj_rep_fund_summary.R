@@ -11,7 +11,7 @@ message("\n")
 library(PerformanceAnalytics) # https://www.rdocumentation.org/packages/PerformanceAnalytics/
 library(plyr)
 library(dplyr)
-source("db_f.R")
+source("/srv/shiny-server/fund4me/db_f.R")
 
 # init data import --------------------------------------------------------
 
@@ -117,21 +117,21 @@ dt_dbobj_rep_fund_summary <- dt_dbobj_rep_fund_summary %>% left_join(dt_calc_dra
 # file operations ---------------------------------------------------------
 
 message("Archiving existing file..")
-message(list.files(path = "/home/ati/Fund4Me/RDS_dt_dbobj_rep_fund_summary/", pattern = ".rds", recursive = F)[1])
+message(list.files(path = "/srv/shiny-server/fund4me/RDS_dt_dbobj_rep_fund_summary/", pattern = ".rds", recursive = F)[1])
 message("\n")
 
-if(is.na(list.files(path = "/home/ati/Fund4Me/RDS_dt_dbobj_rep_fund_summary/", pattern = ".rds", recursive = F)[1])==F){
-  system(paste0("mv /home/ati/Fund4Me/RDS_dt_dbobj_rep_fund_summary/",
-                list.files(path = "/home/ati/Fund4Me/RDS_dt_dbobj_rep_fund_summary/", pattern = ".rds", recursive = F)[1],
-                " /home/ati/Fund4Me/RDS_dt_dbobj_rep_fund_summary/_arch/"))
+if(is.na(list.files(path = "/srv/shiny-server/fund4me/RDS_dt_dbobj_rep_fund_summary/", pattern = ".rds", recursive = F)[1])==F){
+  system(paste0("mv /srv/shiny-server/fund4me/RDS_dt_dbobj_rep_fund_summary/",
+                list.files(path = "/srv/shiny-server/fund4me/RDS_dt_dbobj_rep_fund_summary/", pattern = ".rds", recursive = F)[1],
+                " /srv/shiny-server/fund4me/RDS_dt_dbobj_rep_fund_summary/_arch/"))
 }
 
 message("Saving dataframe into file..")
 
 saveRDS(dt_dbobj_rep_fund_summary, 
-        sprintf("/home/ati/Fund4Me/RDS_dt_dbobj_rep_fund_summary/dt_db_obj_rep_fund_summary_%s.rds",format(Sys.time(),"%Y%m%d%H%M%S")))
+        sprintf("/srv/shiny-server/fund4me/RDS_dt_dbobj_rep_fund_summary/dt_db_obj_rep_fund_summary_%s.rds",format(Sys.time(),"%Y%m%d%H%M%S")))
 
-message(list.files(path = "/home/ati/Fund4Me/RDS_dt_dbobj_rep_fund_summary/", pattern = ".rds", recursive = F)[1])
+message(list.files(path = "/srv/shiny-server/fund4me/RDS_dt_dbobj_rep_fund_summary/", pattern = ".rds", recursive = F)[1])
 message("\n")
 
 
