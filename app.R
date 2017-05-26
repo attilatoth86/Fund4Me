@@ -32,8 +32,8 @@ server <- function(input, output, session) {
 # SERV retrieve dt_dbobj_rep_fund_summary ---------------------------------
 
   progress$set(value = 1) #######################################################################################
-  dt_dbobj_rep_fund_summary <- readRDS(paste0("/home/ati/Fund4Me/RDS_dt_dbobj_rep_fund_summary/",
-                                              list.files(path = "/home/ati/Fund4Me/RDS_dt_dbobj_rep_fund_summary/", pattern = ".rds", recursive = F)[1]
+  dt_dbobj_rep_fund_summary <- readRDS(paste0("/srv/shiny-server/fund4me/RDS_dt_dbobj_rep_fund_summary/",
+                                              list.files(path = "/srv/shiny-server/fund4me/RDS_dt_dbobj_rep_fund_summary/", pattern = ".rds", recursive = F)[1]
                                               )
                                       )
 
@@ -63,6 +63,7 @@ server <- function(input, output, session) {
 # SERV creating output$ objects --------------------------------------------
 
   progress$set(value = 6) #######################################################################################
+  output$v_ref_date <- renderText(paste0("Reference Date: ",format(unique(dt_dbobj_rep_fund_summary$date_recent)[1],format="%B %d %Y")))
   output$DT_cum_return <- DT::renderDataTable(DT::datatable(disp_DT_cum_return, extensions = "Responsive", options = list(language = list(info = "_START_ to _END_ of _TOTAL_", paginate = list(previous = "<<", `next` = ">>")), ordering=T, order = list(list(5, 'desc')), pageLength = 5, bLengthChange=F, searching=F, paging=T, scrollX = T), rownames=F) %>% formatPercentage(c("YTD","1M","3M","6M","1Y","2Y","3Y"),2))
   output$DT_ann_return <- DT::renderDataTable(DT::datatable(disp_DT_ann_return, extensions = "Responsive", options = list(language = list(info = "_START_ to _END_ of _TOTAL_", paginate = list(previous = "<<", `next` = ">>")), ordering=T, order = list(list(1, 'desc')), pageLength = 5, bLengthChange=F, searching=F, paging=T, scrollX = T), rownames=F) %>% formatPercentage(c("2Y","3Y","5Y","10Y"),2))
   output$DT_volatility <- DT::renderDataTable(DT::datatable(disp_DT_volatility, extensions = "Responsive", options = list(language = list(info = "_START_ to _END_ of _TOTAL_", paginate = list(previous = "<<", `next` = ">>")), ordering=T, order = list(list(4, 'asc')), pageLength = 5, bLengthChange=F, searching=F, paging=T, scrollX = T), rownames=F) %>% formatPercentage(c("1Y","2Y","3Y","5Y","10Y"),2))
@@ -204,8 +205,15 @@ ui <- dashboardPage(
                      menuItem("Home", tabName = "home", icon = icon("home")),
                      menuItem("Funds",tabName = NULL, icon = icon("line-chart"),
                               menuItem("Funds Overview", tabName = "funds_overview", icon = icon("angle-right")),# badgeLabel = "soon", badgeColor = "yellow"),
-                              menuItem("Return & Risk Summary", tabName = "funds_returnrisksum", icon = icon("angle-right"))#, badgeLabel = "new", badgeColor = "green")
-                     )
+                              menuItem("Return & Risk Summary", tabName = "funds_returnrisksum", icon = icon("angle-right")),#, badgeLabel = "new", badgeColor = "green")
+                              br(),
+                              menuItem("Fund Managers", tabName = "funds_fundmanagers", icon = icon("angle-right"),
+                                       menuItem("AEGON", href = "https://www.aegonalapkezelo.hu/en/", icon = icon("circle-o"))
+                                       )
+                              ),
+                     tags$li(class="header",
+                       textOutput("v_ref_date")
+                       )
                    ) # sidebarMenu() end
   ),
 
