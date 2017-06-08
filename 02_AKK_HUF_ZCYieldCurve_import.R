@@ -59,7 +59,7 @@ message(paste("Truncate ld.ld_yield_curve..",truncateStatus$errorMsg))
 ldInsertStatus <- psqlInsert_ld(ld_tbl_dump, "ld_yield_curve")
 message(paste("Insert into ld.ld_yield_curve..",ldInsertStatus$errorMsg))
 
-finalInsertStatus <- psqlQuery("--INSERT INTO dw.yield_curve (currency_id, value_date, tenor, yield, yield_curve_type_id, source_object_id)
+finalInsertStatus <- psqlQuery("INSERT INTO dw.yield_curve (currency_id, value_date, tenor, yield, yield_curve_type_id, source_object_id)
                                    SELECT 
                                    ldyc.currency_id::INTEGER,
                                    to_date(ldyc.value_date,'yyyy-mm-dd'),
