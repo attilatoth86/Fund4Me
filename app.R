@@ -62,7 +62,7 @@ server <- function(input, output, session) {
 
 # SERV prep DT Recession Proof ---------------------------------------------
 
-
+  disp_DT_sftq_perf <-dt_dbobj_rep_fund_summary %>% filter(is.na(return_sftq)==F) %>% arrange(desc(return_sftq)) %>% select("Fund Name"=short_name, "Cumulative Return"=return_sftq)
 
 # SERV creating output$ objects - Return & Risk Summary --------------------
 
@@ -206,9 +206,11 @@ server <- function(input, output, session) {
   })
 
 # SERV creating output$ objects - Selection - Recession Proof --------------
-  
+
   progress$set(value = 7) #######################################################################################
 
+  output$DT_sftq_perf <- DT::renderDataTable(DT::datatable(disp_DT_sftq_perf, extensions = "Responsive", options = list(language = list(info = "_START_ to _END_ of _TOTAL_", paginate = list(previous = "<<", `next` = ">>")), ordering=T, pageLength = 5, bLengthChange=F, searching=F, paging=T, scrollX = T), rownames=F) %>% formatPercentage(c("Cumulative Return"),2))
+  
 } # SERV function end
 
 # UI dashboardPage() start ------------------------------------------------
@@ -474,7 +476,19 @@ tabItem(tabName = "sel_recessionproof",
                        )
                      )
                  )
+          ),
+        fluidRow(
+          column(width = 4,
+                 box(status = "primary",
+                     solidHeader = F,
+                     width = NULL,
+                     title = tags$b(div(icon("line-chart"), " Performance in Financial Crisis '07-'09")),
+                     p("The financial crisis of 2007-2009 resulted in a major decline throughout the world's financial markets. This translated in the United States to a 17-month bear market between 9 October 2007 and 9 March 2009. Table below shows fund performances within this period."),
+                     DT::dataTableOutput("DT_sftq_perf")
+                     )
+                 )
           )
+        #DT_sftq_perf
         ),
 
 # UI tabItem return & risk summary ----------------------------------------
