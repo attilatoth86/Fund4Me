@@ -60,27 +60,36 @@ server <- function(input, output, session) {
   disp_DT_drawdown$`Peak` <- as.character(disp_DT_drawdown$`Peak`)
   disp_DT_drawdown$`Trough` <- as.character(disp_DT_drawdown$`Trough`)
 
-# SERV creating output$ objects --------------------------------------------
+# SERV prep DT Recession Proof ---------------------------------------------
+
+
+
+# SERV creating output$ objects - Return & Risk Summary --------------------
 
   progress$set(value = 6) #######################################################################################
-  output$v_ref_date <- renderText(paste0("Reference Date: ",format(unique(dt_dbobj_rep_fund_summary$date_recent)[1],format="%B %d %Y")))
   output$DT_cum_return <- DT::renderDataTable(DT::datatable(disp_DT_cum_return, extensions = "Responsive", options = list(language = list(info = "_START_ to _END_ of _TOTAL_", paginate = list(previous = "<<", `next` = ">>")), ordering=T, order = list(list(5, 'desc')), pageLength = 5, bLengthChange=F, searching=F, paging=T, scrollX = T), rownames=F) %>% formatPercentage(c("YTD","1M","3M","6M","1Y","2Y","3Y"),2))
   output$DT_ann_return <- DT::renderDataTable(DT::datatable(disp_DT_ann_return, extensions = "Responsive", options = list(language = list(info = "_START_ to _END_ of _TOTAL_", paginate = list(previous = "<<", `next` = ">>")), ordering=T, order = list(list(1, 'desc')), pageLength = 5, bLengthChange=F, searching=F, paging=T, scrollX = T), rownames=F) %>% formatPercentage(c("2Y","3Y","5Y","10Y"),2))
   output$DT_volatility <- DT::renderDataTable(DT::datatable(disp_DT_volatility, extensions = "Responsive", options = list(language = list(info = "_START_ to _END_ of _TOTAL_", paginate = list(previous = "<<", `next` = ">>")), ordering=T, order = list(list(4, 'asc')), pageLength = 5, bLengthChange=F, searching=F, paging=T, scrollX = T), rownames=F) %>% formatPercentage(c("1Y","2Y","3Y","5Y","10Y"),2))
   output$DT_drawdown <- DT::renderDataTable(DT::datatable(disp_DT_drawdown, extensions = "Responsive", options = list(language = list(info = "_START_ to _END_ of _TOTAL_", paginate = list(previous = "<<", `next` = ">>")), ordering=T, order = list(list(1, 'desc')), pageLength = 5, bLengthChange=F, searching=F, paging=T, scrollX = T), rownames=F) %>% formatPercentage(c("Depth"),2))
-  
+
+# SERV creating output$ objects - LT price change plots --------------------
+
   lapply(dt_dbobj_rep_fund_summary$fund_id, function(i_fundid){
     dt_proc <- dt_dbobj_rep_fund_price_daily_analytics[dt_dbobj_rep_fund_price_daily_analytics$fund_id==i_fundid,]
     output[[paste0("PLT_price_chg_pct_fund_",i_fundid)]] <- plotly::renderPlotly(plot_ly() %>% add_trace(data=dt_proc, x=~date, y=~price_chg*100, mode="lines") %>% layout(xaxis=list(title=""), yaxis=list(title="Price Change %")))
   })
-  
+
+# SERV creating output$ objects - Fund info boxes --------------------------
+
   lapply(dt_dbobj_rep_fund_summary$fund_id, function(i_fundid){
     output[[paste0("UI_box_summary_fund_",i_fundid)]] <- renderUI({
       box(width = 6,
-          collapsible = T, collapsed = !(which(dt_dbobj_rep_fund_summary[order(dt_dbobj_rep_fund_summary$nav_recent, decreasing = T),]$fund_id==i_fundid)==1),
+          collapsible = T, collapsed = F,
           status = "primary",
           title = dt_dbobj_rep_fund_summary[dt_dbobj_rep_fund_summary$fund_id==i_fundid,"name"],
           tags$table(
+            tags$col(width="180"),
+            tags$col(width="270"),
             tags$tr(
               tags$td(style="padding: 1px 3px 1px 1px;vertical-align:top;",tags$b("ISIN")),
               tags$td(style="padding: 1px 3px 1px 1px;vertical-align:top;",
@@ -156,34 +165,47 @@ server <- function(input, output, session) {
     })
   })
 
-  output$UI_block_funds_overview_fund_details_10bnplus <- renderUI({
+# SERV creating output$ objects - Equity Funds -----------------------------
+
+  output$UI_block_funds_overview_fund_details_Eq <- renderUI({
     fluidRow(
-      lapply((arrange(dt_dbobj_rep_fund_summary,desc(nav_recent)) %>% filter(nav_recent>10000000000))$fund_id, function(i_fundid) {
+      lapply((filter(dt_dbobj_rep_fund_summary, fund_category =="Equity") %>% arrange(desc(nav_recent)))$fund_id, function(i_fundid) {
         uiOutput(paste0('UI_box_summary_fund_', i_fundid))
-      })         
+      })
     )
   })
-  output$UI_block_funds_overview_fund_details_5_10bn <- renderUI({
+
+# SERV creating output$ objects - Absolute Return Funds --------------------
+  
+  output$UI_block_funds_overview_fund_details_AbsRet <- renderUI({
     fluidRow(
-      lapply((arrange(dt_dbobj_rep_fund_summary,desc(nav_recent)) %>% filter(nav_recent>5000000000 & nav_recent<=10000000000))$fund_id, function(i_fundid) {
+      lapply((filter(dt_dbobj_rep_fund_summary,fund_category =="Absolute Return") %>% arrange(desc(nav_recent)))$fund_id, function(i_fundid) {
         uiOutput(paste0('UI_box_summary_fund_', i_fundid))
-      })         
+      })
     )
   })
-  output$UI_block_funds_overview_fund_details_1_5bn <- renderUI({
+
+# SERV creating output$ objects - Bond Funds -------------------------------
+  
+  output$UI_block_funds_overview_fund_details_Bond <- renderUI({
     fluidRow(
-      lapply((arrange(dt_dbobj_rep_fund_summary,desc(nav_recent)) %>% filter(nav_recent>1000000000 & nav_recent<=5000000000))$fund_id, function(i_fundid) {
+      lapply((filter(dt_dbobj_rep_fund_summary,fund_category %in% c("Long Bond","Short Bond","Unlimited Duration Bond")) %>% arrange(desc(nav_recent)))$fund_id, function(i_fundid) {
         uiOutput(paste0('UI_box_summary_fund_', i_fundid))
-      })         
+      })
     )
   })
-  output$UI_block_funds_overview_fund_details_1bnminus <- renderUI({
+  
+# SERV creating output$ objects - Other Funds -------------------------------
+  
+  output$UI_block_funds_overview_fund_details_Oth <- renderUI({
     fluidRow(
-      lapply((arrange(dt_dbobj_rep_fund_summary,desc(nav_recent)) %>% filter(nav_recent<=1000000000))$fund_id, function(i_fundid) {
+      lapply((filter(dt_dbobj_rep_fund_summary,!fund_category %in% c("Equity","Absolute Return","Long Bond","Short Bond","Unlimited Duration Bond")) %>% arrange(desc(nav_recent)))$fund_id, function(i_fundid) {
         uiOutput(paste0('UI_box_summary_fund_', i_fundid))
-      })         
+      })
     )
   })
+
+# SERV creating output$ objects - Selection - Recession Proof --------------
   
   progress$set(value = 7) #######################################################################################
 
@@ -204,16 +226,25 @@ ui <- dashboardPage(
                    sidebarMenu(
                      menuItem("Home", tabName = "home", icon = icon("home")),
                      menuItem("Funds",tabName = NULL, icon = icon("line-chart"),
-                              menuItem("Funds Overview", tabName = "funds_overview", icon = icon("angle-right")),# badgeLabel = "soon", badgeColor = "yellow"),
-                              menuItem("Return & Risk Summary", tabName = "funds_returnrisksum", icon = icon("angle-right")),#, badgeLabel = "new", badgeColor = "green")
+                              menuItem("Return & Risk Summary", tabName = "funds_returnrisksum", icon = icon("bars")),#, badgeLabel = "new", badgeColor = "green")
                               br(),
-                              menuItem("Fund Managers", tabName = "funds_fundmanagers", icon = icon("angle-right"),
-                                       menuItem("AEGON", href = "https://www.aegonalapkezelo.hu/en/", icon = icon("circle-o"))
+                              
+                              menuItem("Equity Funds", tabName = "eq_funds_overview", icon = icon("angle-double-right")),# badgeLabel = "soon", badgeColor = "yellow"),
+                              menuItem("Absolute Return Funds", tabName = "absret_funds_overview", icon = icon("angle-double-right")),# badgeLabel = "soon", badgeColor = "yellow"),
+                              menuItem("Bond Funds", tabName = "bond_funds_overview", icon = icon("angle-double-right")),# badgeLabel = "soon", badgeColor = "yellow"),
+                              menuItem("Other Funds", tabName = "oth_funds_overview", icon = icon("angle-double-right")),# badgeLabel = "soon", badgeColor = "yellow"),
+                              br(),
+                              
+                              menuItem("Selections", icon = icon("folder-open"),
+                                       menuItem("Recession-Proof Funds", tabName = "sel_recessionproof", icon = icon("angle-double-right"))
+                                       ),
+                              
+                              br(),
+                              menuItem("Fund Managers", icon = icon("users"),
+                                       menuItem("AEGON Website", href = "https://www.aegonalapkezelo.hu/en/", icon = icon("globe")),
+                                       menuItem("CONCORDE Website", href = "http://concordeam.com", icon = icon("globe"))
                                        )
-                              ),
-                     tags$li(class="header",
-                       textOutput("v_ref_date")
-                       )
+                              )
                    ) # sidebarMenu() end
   ),
 
@@ -266,15 +297,16 @@ ui <- dashboardPage(
                                        "The application in its current stage acts as an information gathering and presentation tool that collects publicly available fund price information, stores, processes, structures them, and eventually presents summarized results in a well interpretable way so that users may gain valuable insights about mutual funds' past performances.",
                                        br(),br(),
                                        h4("Funds"),
-                                       "Fund price information is currently sourced (therefore available within the app) only from the Hungarian branch of",a("AEGON Asset Management.",href="https://www.aegonalapkezelo.hu/",target="_blank"),
-                                       "AEGON has been selected for this data project due to its investor-friendly online presence, e.g. publishing daily fund price information online in a way that allows for automated data capturing.",
-                                       "Fund4Me only processes AEGON's HUF denominated fund portfolio, other currencies are out of scope for now.",
+                                       "Fund price information is currently sourced from the",a("website",href="http://www.bamosz.hu/en/",target="_blank"),"of Association of Hungarian Investment Fund and Asset Management Companies (BAMOSZ).",
+                                       "Current scope is limited to funds of two asset managers, AEGON Hungary Investment Fund Management and CONCORDE Investment Fund Management, available for purchase online by retail investors. These two asset managers have been selected for this data project due to their successful track record and professional recognition within Hungary. Additionally, AEGON and CONCORDE have been awarded 2-2 times in the last 4 years as 'Best Asset Manager or the Year'.",
+                                       "Scope of the project is subject to extension any time in the future to involve further significant, trustworthy players of the Hungarian market.",
+                                       "Fund4Me only processes HUF denominated funds, other currencies are out of scope for now.",
                                        br(),br(),
-                                       tags$b("The author of this application does not maintain any form of business relationship with AEGON Asset Management and does not carry out any form of business activity for or on behalf of them."),
+                                       tags$b("The author of this application does not maintain any form of business relationship with AEGON, CONCORDE or any further asset manager that may appear on this website and does not carry out any form of business activity for or on behalf of them."),
                                        br(),br(),
                                        h4("Operation in a nutshell"),
                                        tags$ul(
-                                         tags$li("A scheduled job in the stack scans AEGON's web portal on a daily basis searching for newly added fund prices."),
+                                         tags$li("A scheduled job in the stack scans BAMOSZ's web portal on a daily basis searching for newly added fund prices."),
                                          tags$li("Some of the calculated metrics require general market information (e.g. yield curve, interest rates), too. Another set of scheduled jobs collects these pieces of information from",a("Government Debt Management Agency of Hungary",href="http://www.akk.hu",target="_blank"),"(AKK)."),
                                          tags$li("New fund prices and other collected market information are loaded into Fund4Me's database, wherein they get further processed and stored."),
                                          tags$li("Based on the most up-to-date information, the application generates visualizations, calculates key performance & risk metrics.")
@@ -313,11 +345,11 @@ ui <- dashboardPage(
                               tabPanel(title = "Terms of Use",
                                        "By accessing this web site, the pages contained on it, the products, services, information, tools and material contained or described herein (the \"Site\"), you acknowledge your agreement with and understanding of the following terms of use.",
                                        br(),br(),
-                                       h4("Information supplied"),
+                                       h4("Information Supplied"),
                                        "The content on this website was produced by Attila Toth (hereafter \"Author\") with the greatest of care and to the best of his knowledge and belief. However, Author provides no guarantee with regard to its content and completeness and does not accept any liability for losses which might arise from making use of the information contained herein. All details are provided for information purposes only. The information provided herein is not legally binding and it does not constitute an offer or invitation to enter into any type of financial transaction. The recipient is in particular recommended to check that the information provided is in line with his/her own circumstances with regard to any legal, regulatory, tax or other consequences, if necessary with the help of a professional advisor.",
                                        br(),br(),
-                                       h4("Sales restrictions and Fund Documents"),
-                                       "The investment funds mentioned on this Site may only be purchased on the basis of the current sales prospectus and the most recent annual report (or monthly, quarterly report, if these are more recent). The key investor information documentation and the most recent reports are all available from",a("this",href="https://www.aegonalapkezelo.hu/",target="_blank"),"website.",
+                                       h4("Sales Restrictions and Fund Documents"),
+                                       "The investment funds mentioned on this Site may only be purchased on the basis of the current sales prospectus and the most recent annual report (or monthly, quarterly report, if these are more recent). The key investor information documentation and the most recent reports are all available from",a("AEGON's",href="https://www.aegonalapkezelo.hu/",target="_blank"),"and",a("CONCORDE's",href="http://concordealapkezelo.hu/",target="_blank"),"website.",
                                        br(),br(),
                                        h4("Risk Considerations"),
                                        "Every investment involves risk, especially with regard to fluctuations in value and return.",
@@ -344,37 +376,106 @@ ui <- dashboardPage(
               ) # fluidRow() end
       ),
 
-# UI tabItem funds overview -----------------------------------------------
+# UI tabItem Equity funds overview -----------------------------------------
 
-      tabItem(tabName = "funds_overview",
-              h2("Funds", tags$small("Overview")),
-              fluidRow(
-                column(width = 12,
-                       box(width = NULL,
-                           tags$table(
-                             tags$col(width="75"),
-                             tags$tr(
-                               tags$td(h4(icon("info-circle"), "Info")),
-                               tags$td("This page provides high-level, summarized information about each and every fund being processed.",
-                                       "Funds' infoboxes are collapsible and sorted by their most recent market share (net asset value).")
-                             )
-                           )
+tabItem(tabName = "eq_funds_overview",
+        h2("Equity Funds", tags$small("Overview")),
+        fluidRow(
+          column(width = 12,
+                 box(width = NULL,
+                     tags$table(
+                       tags$col(width="75"),
+                       tags$tr(
+                         tags$td(h4(icon("info-circle"), "Info")),
+                         tags$td("Equity (or stock) funds invest in stocks, also called equity securities. Fund assets are typically in stock, with some amount of cash, which is generally quite small. The objective of an equity fund is long-term growth through capital gains and dividends.")
                        )
-                )
-              ),
-              h4("Funds with 10+ BN HUF Assets Under Management"),
-              uiOutput("UI_block_funds_overview_fund_details_10bnplus"),
-              hr(),
-              h4("Funds with 5 to 10 BN HUF Assets Under Management"),
-              uiOutput("UI_block_funds_overview_fund_details_5_10bn"),
-              hr(),
-              h4("Funds with 1 to 5 BN HUF Assets Under Management"),
-              uiOutput("UI_block_funds_overview_fund_details_1_5bn"),
-              hr(),
-              h4("Funds with 1- BN HUF Assets Under Management"),
-              uiOutput("UI_block_funds_overview_fund_details_1bnminus"),
-              hr()
-              ),
+                     )
+                 )
+          )
+        ),
+        uiOutput("UI_block_funds_overview_fund_details_Eq")
+),
+
+# UI tabItem Absolute Return Funds overview --------------------------------
+
+tabItem(tabName = "absret_funds_overview",
+        h2("Absolute Return Funds", tags$small("Overview")),
+        fluidRow(
+          column(width = 12,
+                 box(width = NULL,
+                     tags$table(
+                       tags$col(width="75"),
+                       tags$tr(
+                         tags$td(h4(icon("info-circle"), "Info")),
+                         tags$td("Absolute return funds aim to deliver returns in any, both rising and falling, market conditions. Therefore they invest in a wide range of asset classes and employ various investment strategies. These strategies may often include usage of derivatives. Managers may also take short positions or invest in exotic securities.")
+                       )
+                     )
+                 )
+          )
+        ),
+        uiOutput("UI_block_funds_overview_fund_details_AbsRet")
+),
+
+# UI tabItem Bond Funds overview -------------------------------------------
+
+tabItem(tabName = "bond_funds_overview",
+        h2("Bond Funds", tags$small("Overview")),
+        fluidRow(
+          column(width = 12,
+                 box(width = NULL,
+                     tags$table(
+                       tags$col(width="75"),
+                       tags$tr(
+                         tags$td(h4(icon("info-circle"), "Info")),
+                         tags$td("Bond (or debt) funds invest in bonds or other debt securities. They usually invest in various type of bonds, issued by government, government agencies, municipalities or corporations.")
+                       )
+                     )
+                 )
+          )
+        ),
+        uiOutput("UI_block_funds_overview_fund_details_Bond")
+        ),
+
+# UI tabItem Other Funds overview ------------------------------------------
+
+tabItem(tabName = "oth_funds_overview",
+        h2("Other Funds", tags$small("Overview")),
+        fluidRow(
+          column(width = 12,
+                 box(width = NULL,
+                     tags$table(
+                       tags$col(width="75"),
+                       tags$tr(
+                         tags$td(h4(icon("info-circle"), "Info")),
+                         tags$td("Listed funds below represent various minor categories (e.g. Balanced, Deliberate, Dynamic, Guaranteed Funds, Other Money Market, etc.) of funds.")
+                       )
+                     )
+                 )
+          )
+        ),
+        uiOutput("UI_block_funds_overview_fund_details_Oth")
+        ),
+
+# UI tabItem Selections - Recession Proof ----------------------------------
+
+tabItem(tabName = "sel_recessionproof",
+        h2("Selections", tags$small("Recession-Proof Funds")),
+        fluidRow(
+          column(width = 12,
+                 box(width = NULL,
+                     tags$table(
+                       tags$col(width="75"),
+                       tags$tr(
+                         tags$td(h4(icon("info-circle"), "Info")),
+                         tags$td("The most recent period of a significant, worldwide, general economic decline took place during the late 2000s and early 2010s. It is considered to be triggered by the financial crisis in 2007-2008 which resulted in massive plunge and volatility on the markets globally.",
+                                 "When making long-term investment decisions, it is recommended to consider certain performance indicators during such crisis.",
+                                 "Below is a collection of funds that had already operated during the Great Recession.")
+                         )
+                       )
+                     )
+                 )
+          )
+        ),
 
 # UI tabItem return & risk summary ----------------------------------------
 
