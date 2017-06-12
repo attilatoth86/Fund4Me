@@ -64,7 +64,7 @@ truncateStatus <- psqlQuery("TRUNCATE TABLE rep.fund_summary;")
 message(paste0("Truncate rep.fund_summary table........",truncateStatus$errorMsg))
 
 message("\n")
-queryString <- sprintf("INSERT INTO rep.fund_summary (fund_id, source_object_id, date_start, date_recent, date_ytd, date_1m, date_3m, date_6m, date_1yr, date_2yr, date_3yr, date_5yr, date_10yr, price_start, price_recent, price_ytd, price_1m, price_3m, price_6m, price_1yr, price_2yr, price_3yr, price_5yr, price_10yr, nav_recent, price_sftq_start, price_sftq_end)
+queryString <- sprintf("INSERT INTO rep.fund_summary (fund_id, source_object_id, date_start, date_recent, date_ytd, date_1m, date_3m, date_6m, date_1yr, date_2yr, date_3yr, date_5yr, date_10yr, price_start, price_recent, price_ytd, price_1m, price_3m, price_6m, price_1yr, price_2yr, price_3yr, price_5yr, price_10yr, nav_recent, price_sftq_start, price_sftq_end, date_sftq_start, date_sftq_end)
                           SELECT 
                             core.fund_id, core.source_object_id, core.date_start, core.date_recent, core.date_ytd, core.date_1m, core.date_3m, core.date_6m, core.date_1yr, core.date_2yr, core.date_3yr, core.date_5yr, core.date_10yr,
                             fpstart.price price_start,
@@ -80,7 +80,9 @@ queryString <- sprintf("INSERT INTO rep.fund_summary (fund_id, source_object_id,
                             fp10y.price price_10yr,
                             fprecent.net_asset_value nav_recent,
                             fpsftqstart.price price_sftq_start,
-                            fpsftqend.price price_sftq_end
+                            fpsftqend.price price_sftq_end,
+                            core.date_sftq_start,
+                            core.date_sftq_end
                           FROM
                             (
                             SELECT
