@@ -105,6 +105,23 @@ for(i_vol_fundid in dt_dbobj_rep_fund_summary$fund_id){
 }
 dt_dbobj_rep_fund_summary <- dt_dbobj_rep_fund_summary %>% left_join(dt_calc_volatility, by="fund_id")
 
+### SFTQ Volatility
+
+dt_calc_sftq_volatility <- data.frame(integer(),double())
+for(i_vol_fundid in dt_dbobj_rep_fund_summary[is.na(dt_dbobj_rep_fund_summary$price_sftq_start)==F,]$fund_id){
+    dt_proc <- dt_dbobj_rep_fund_price_daily_analytics[dt_dbobj_rep_fund_price_daily_analytics$fund_id==i_vol_fundid & dt_dbobj_rep_fund_price_daily_analytics$date>=dt_dbobj_rep_fund_summary[dt_dbobj_rep_fund_summary$fund_id==i_vol_fundid,"date_sftq_start"] & dt_dbobj_rep_fund_price_daily_analytics$date<=dt_dbobj_rep_fund_summary[dt_dbobj_rep_fund_summary$fund_id==i_vol_fundid,"date_sftq_end"],"return"]
+    val_calc_sftq_volatility <- StdDev.annualized(dt_proc,scale=252)
+
+    dt_calc_sftq_volatility <- rbind(dt_calc_sftq_volatility,
+                                      data.frame(fund_id=i_vol_fundid,
+                                                 volatility_sftq=val_calc_sftq_volatility[1]
+                                      )
+                                     )
+}
+
+dt_dbobj_rep_fund_summary <- dt_dbobj_rep_fund_summary %>% left_join(dt_calc_sftq_volatility, by="fund_id")
+
+
 # calculate drawndowns ----------------------------------------------------
 
 message("Calculating drawdowns..")
@@ -129,6 +146,24 @@ for(i_dd_fundid in dt_dbobj_rep_fund_summary$fund_id){
 }
 
 dt_dbobj_rep_fund_summary <- dt_dbobj_rep_fund_summary %>% left_join(dt_calc_drawdown, by="fund_id")
+
+### SFTQ Drawdown
+
+dt_calc_sftq_drawdown <- data.frame(integer(),double(),integer())
+for(i_dd_fundid in dt_dbobj_rep_fund_summary[is.na(dt_dbobj_rep_fund_summary$price_sftq_start)==F,]$fund_id){
+  dt_proc <- dt_dbobj_rep_fund_price_daily_analytics[dt_dbobj_rep_fund_price_daily_analytics$fund_id==i_dd_fundid & dt_dbobj_rep_fund_price_daily_analytics$date>=dt_dbobj_rep_fund_summary[dt_dbobj_rep_fund_summary$fund_id==i_dd_fundid,"date_sftq_start"] & dt_dbobj_rep_fund_price_daily_analytics$date<=dt_dbobj_rep_fund_summary[dt_dbobj_rep_fund_summary$fund_id==i_dd_fundid,"date_sftq_end"],c("date","return")]
+  rownames(dt_proc) <- dt_proc$date
+  dt_proc$date <- NULL
+  dt_out <- data.frame(fund_id=i_dd_fundid,table.Drawdowns(dt_proc)[1,])
+  dt_calc_sftq_drawdown <- rbind(dt_calc_sftq_drawdown,
+                            data.frame(fund_id=dt_out[1,1],
+                                       drawdown_sftq_depth=dt_out[1,5],
+                                       drawdown_sftq_length=dt_out[1,6])
+                            )
+}
+
+dt_dbobj_rep_fund_summary <- dt_dbobj_rep_fund_summary %>% left_join(dt_calc_sftq_drawdown, by="fund_id")
+
 
 # file operations ---------------------------------------------------------
 
@@ -208,14 +243,22 @@ df_to_load <- data.frame(fund_summary_id=dt_dbobj_rep_fund_summary$id,
                          drawdown_length=dt_dbobj_rep_fund_summary$drawdown_length,
                          drawdown_totrough=dt_dbobj_rep_fund_summary$drawdown_totrough,
                          drawdown_recovery=dt_dbobj_rep_fund_summary$drawdown_recovery,
-                         return_sftq=dt_dbobj_rep_fund_summary$return_sftq)
+                         return_sftq=dt_dbobj_rep_fund_summary$return_sftq,
+                         price_sftq_start=dt_dbobj_rep_fund_summary$price_sftq_start,
+                         price_sftq_end=dt_dbobj_rep_fund_summary$price_sftq_end,
+                         date_sftq_start=dt_dbobj_rep_fund_summary$date_sftq_start,
+                         date_sftq_end=dt_dbobj_rep_fund_summary$date_sftq_end,
+                         volatility_sftq=dt_dbobj_rep_fund_summary$volatility_sftq,
+                         drawdown_sftq_depth=dt_dbobj_rep_fund_summary$drawdown_sftq_depth,
+                         drawdown_sftq_length=dt_dbobj_rep_fund_summary$drawdown_sftq_length
+                         )
 
 truncateStatus <- psqlQuery("TRUNCATE TABLE ld.ld_fund_summary_ext;")
 message(paste0("Truncate ld.ld_fund_summary_ext table........",truncateStatus$errorMsg))
 insertLdStatus <- psqlInsert_ld(df_to_load,"ld_fund_summary_ext")
 message(paste0("Insert into ld.ld_fund_summary_ext table........",insertLdStatus$errorMsg))
-insertStatus <- psqlQuery("INSERT INTO rep.fund_summary_ext (fund_summary_id,fund_id,source_object_id,date_start,date_recent,date_ytd,date_1m,date_3m,date_6m,date_1yr,date_2yr,date_3yr,date_5yr,date_10yr,price_start,price_recent,price_ytd,price_1m,price_3m,price_6m,price_1yr,price_2yr,price_3yr,price_5yr,price_10yr,nav_recent,name,short_name,isin,asset_manager_name,currency,fund_category,return_ytd,return_1m,return_3m,return_6m,return_1yr,return_2yr,return_3yr,return_ann_2yr,return_ann_3yr,return_ann_5yr,return_ann_10yr,return_ann_si,volatility_1yr,volatility_2yr,volatility_3yr,volatility_5yr,volatility_10yr,drawdown_from,drawdown_trough,drawdown_to,drawdown_depth,drawdown_length,drawdown_totrough,drawdown_recovery,return_sftq)
-                          SELECT fund_summary_id,fund_id,source_object_id,date_start,date_recent,date_ytd,date_1m,date_3m,date_6m,date_1yr,date_2yr,date_3yr,date_5yr,date_10yr,price_start,price_recent,price_ytd,price_1m,price_3m,price_6m,price_1yr,price_2yr,price_3yr,price_5yr,price_10yr,nav_recent,name,short_name,isin,asset_manager_name,currency,fund_category,return_ytd,return_1m,return_3m,return_6m,return_1yr,return_2yr,return_3yr,return_ann_2yr,return_ann_3yr,return_ann_5yr,return_ann_10yr,return_ann_si,volatility_1yr,volatility_2yr,volatility_3yr,volatility_5yr,volatility_10yr,drawdown_from,drawdown_trough,drawdown_to,drawdown_depth,drawdown_length,drawdown_totrough,drawdown_recovery,return_sftq FROM ld.ld_fund_summary_ext") 
+insertStatus <- psqlQuery("INSERT INTO rep.fund_summary_ext (fund_summary_id,fund_id,source_object_id,date_start,date_recent,date_ytd,date_1m,date_3m,date_6m,date_1yr,date_2yr,date_3yr,date_5yr,date_10yr,price_start,price_recent,price_ytd,price_1m,price_3m,price_6m,price_1yr,price_2yr,price_3yr,price_5yr,price_10yr,nav_recent,name,short_name,isin,asset_manager_name,currency,fund_category,return_ytd,return_1m,return_3m,return_6m,return_1yr,return_2yr,return_3yr,return_ann_2yr,return_ann_3yr,return_ann_5yr,return_ann_10yr,return_ann_si,volatility_1yr,volatility_2yr,volatility_3yr,volatility_5yr,volatility_10yr,drawdown_from,drawdown_trough,drawdown_to,drawdown_depth,drawdown_length,drawdown_totrough,drawdown_recovery,return_sftq,price_sftq_start,price_sftq_end,date_sftq_start,date_sftq_end,volatility_sftq,drawdown_sftq_depth,drawdown_sftq_length)
+                          SELECT fund_summary_id,fund_id,source_object_id,date_start,date_recent,date_ytd,date_1m,date_3m,date_6m,date_1yr,date_2yr,date_3yr,date_5yr,date_10yr,price_start,price_recent,price_ytd,price_1m,price_3m,price_6m,price_1yr,price_2yr,price_3yr,price_5yr,price_10yr,nav_recent,name,short_name,isin,asset_manager_name,currency,fund_category,return_ytd,return_1m,return_3m,return_6m,return_1yr,return_2yr,return_3yr,return_ann_2yr,return_ann_3yr,return_ann_5yr,return_ann_10yr,return_ann_si,volatility_1yr,volatility_2yr,volatility_3yr,volatility_5yr,volatility_10yr,drawdown_from,drawdown_trough,drawdown_to,drawdown_depth,drawdown_length,drawdown_totrough,drawdown_recovery,return_sftq,price_sftq_start,price_sftq_end,date_sftq_start,date_sftq_end,volatility_sftq,drawdown_sftq_depth,drawdown_sftq_length FROM ld.ld_fund_summary_ext") 
 message(paste0("Insert into rep.fund_summary_ext table........",insertStatus$errorMsg))
 
 message(paste("Job ends: ",Sys.time()))
