@@ -12,6 +12,7 @@ library(dplyr)
 # Init source external resources ------------------------------------------
 
 source("db_f.R")
+source("f_UI_builder.R")
 
 # SERV init ---------------------------------------------------------------
 
@@ -62,7 +63,7 @@ server <- function(input, output, session) {
 
 # SERV prep DT Recession Proof ---------------------------------------------
 
-  disp_DT_sftq_perf <-dt_dbobj_rep_fund_summary %>% filter(is.na(return_sftq)==F) %>% arrange(desc(return_sftq)) %>% select("Fund Name"=short_name, "Cumulative Return"=return_sftq)
+  disp_DT_sftq_perf <-dt_dbobj_rep_fund_summary %>% filter(is.na(return_sftq)==F) %>% mutate(drawdown_sftq_length_rep=paste(drawdown_sftq_length,"days")) %>% arrange(desc(return_sftq)) %>% select("Fund Name"=short_name, "Return"=return_sftq, "Volatility"=volatility_sftq, "Max. Drawdown"=drawdown_sftq_depth, "Max. Drawdown Length"=drawdown_sftq_length_rep)
 
 # SERV creating output$ objects - Return & Risk Summary --------------------
 
@@ -70,7 +71,7 @@ server <- function(input, output, session) {
   output$DT_cum_return <- DT::renderDataTable(DT::datatable(disp_DT_cum_return, extensions = "Responsive", options = list(language = list(info = "_START_ to _END_ of _TOTAL_", paginate = list(previous = "<<", `next` = ">>")), ordering=T, order = list(list(5, 'desc')), pageLength = 5, bLengthChange=F, searching=F, paging=T, scrollX = T), rownames=F) %>% formatPercentage(c("YTD","1M","3M","6M","1Y","2Y","3Y"),2))
   output$DT_ann_return <- DT::renderDataTable(DT::datatable(disp_DT_ann_return, extensions = "Responsive", options = list(language = list(info = "_START_ to _END_ of _TOTAL_", paginate = list(previous = "<<", `next` = ">>")), ordering=T, order = list(list(1, 'desc')), pageLength = 5, bLengthChange=F, searching=F, paging=T, scrollX = T), rownames=F) %>% formatPercentage(c("2Y","3Y","5Y","10Y"),2))
   output$DT_volatility <- DT::renderDataTable(DT::datatable(disp_DT_volatility, extensions = "Responsive", options = list(language = list(info = "_START_ to _END_ of _TOTAL_", paginate = list(previous = "<<", `next` = ">>")), ordering=T, order = list(list(4, 'asc')), pageLength = 5, bLengthChange=F, searching=F, paging=T, scrollX = T), rownames=F) %>% formatPercentage(c("1Y","2Y","3Y","5Y","10Y"),2))
-  output$DT_drawdown <- DT::renderDataTable(DT::datatable(disp_DT_drawdown, extensions = "Responsive", options = list(language = list(info = "_START_ to _END_ of _TOTAL_", paginate = list(previous = "<<", `next` = ">>")), ordering=T, order = list(list(1, 'desc')), pageLength = 5, bLengthChange=F, searching=F, paging=T, scrollX = T), rownames=F) %>% formatPercentage(c("Depth"),2))
+  output$DT_drawdown <- DT::renderDataTable(DT::datatable(disp_DT_drawdown, extensions = "Responsive", options = list(language = list(info = "_START_ to _END_ of _TOTAL_", paginate = list(previous = "<<", `next` = ">>")), ordering=T, order = list(list(1, 'desc')), pageLength = 5, bLengthChange=F, searching=F, paging=T, scrollX = T, columnDefs = list(list(className = 'dt-center', targets = 1:3))), rownames=F) %>% formatPercentage(c("Depth"),2))
 
 # SERV creating output$ objects - LT price change plots --------------------
 
@@ -84,6 +85,7 @@ server <- function(input, output, session) {
   lapply(dt_dbobj_rep_fund_summary$fund_id, function(i_fundid){
     output[[paste0("UI_box_summary_fund_",i_fundid)]] <- renderUI({
       box(width = 6,
+          id=paste0("fund_card_",i_fundid),
           collapsible = T, collapsed = F,
           status = "primary",
           title = dt_dbobj_rep_fund_summary[dt_dbobj_rep_fund_summary$fund_id==i_fundid,"name"],
@@ -168,11 +170,14 @@ server <- function(input, output, session) {
 # SERV creating output$ objects - Equity Funds -----------------------------
 
   output$UI_block_funds_overview_fund_details_Eq <- renderUI({
-    fluidRow(
-      lapply((filter(dt_dbobj_rep_fund_summary, fund_category =="Equity") %>% arrange(desc(nav_recent)))$fund_id, function(i_fundid) {
-        uiOutput(paste0('UI_box_summary_fund_', i_fundid))
-      })
-    )
+      fluidRow(
+        lapply((filter(dt_dbobj_rep_fund_summary, fund_category =="Equity") %>% arrange(desc(nav_recent)))$fund_id, function(i_fundid) {
+          uiOutput(paste0('UI_box_summary_fund_', i_fundid))
+        })
+      ) 
+  })
+  output$UI_block_funds_overview_fund_details_Eq_links <- renderUI({
+    f_fund_quicklinks_box(c("Equity"),"in",dt_dbobj_rep_fund_summary)
   })
 
 # SERV creating output$ objects - Absolute Return Funds --------------------
@@ -184,6 +189,9 @@ server <- function(input, output, session) {
       })
     )
   })
+  output$UI_block_funds_overview_fund_details_AbsRet_links <- renderUI({
+    f_fund_quicklinks_box(c("Absolute Return"),"in",dt_dbobj_rep_fund_summary)
+  })
 
 # SERV creating output$ objects - Bond Funds -------------------------------
   
@@ -193,6 +201,9 @@ server <- function(input, output, session) {
         uiOutput(paste0('UI_box_summary_fund_', i_fundid))
       })
     )
+  })
+  output$UI_block_funds_overview_fund_details_Bond_links <- renderUI({
+    f_fund_quicklinks_box(c("Long Bond","Short Bond","Unlimited Duration Bond"),"in",dt_dbobj_rep_fund_summary)
   })
   
 # SERV creating output$ objects - Other Funds -------------------------------
@@ -204,12 +215,23 @@ server <- function(input, output, session) {
       })
     )
   })
+  output$UI_block_funds_overview_fund_details_Oth_links <- renderUI({
+    f_fund_quicklinks_box(c("Equity","Absolute Return","Long Bond","Short Bond","Unlimited Duration Bond"),"not in",dt_dbobj_rep_fund_summary)
+  })
 
 # SERV creating output$ objects - Selection - Recession Proof --------------
 
   progress$set(value = 7) #######################################################################################
 
-  output$DT_sftq_perf <- DT::renderDataTable(DT::datatable(disp_DT_sftq_perf, extensions = "Responsive", options = list(language = list(info = "_START_ to _END_ of _TOTAL_", paginate = list(previous = "<<", `next` = ">>")), ordering=T, pageLength = 5, bLengthChange=F, searching=F, paging=T, scrollX = T), rownames=F) %>% formatPercentage(c("Cumulative Return"),2))
+  output$DT_sftq_perf <- DT::renderDataTable(DT::datatable(disp_DT_sftq_perf, extensions = "Responsive", options = list(language = list(info = "_START_ to _END_ of _TOTAL_", paginate = list(previous = "<<", `next` = ">>")), ordering=T, pageLength = 5, bLengthChange=F, searching=F, paging=T, scrollX = T, columnDefs = list(list(className = 'dt-center', targets = 1:4))), rownames=F) %>% formatPercentage(c("Return","Volatility","Max. Drawdown"),2))
+  # plot_dt_sftq_price <- dt_dbobj_rep_fund_price_daily_analytics %>%
+  #                         filter(date>="2007-10-09" & 
+  #                                date<="2009-03-09" & 
+  #                                fund_id %in% dt_dbobj_rep_fund_summary[is.na(dt_dbobj_rep_fund_summary$return_sftq)==F,"fund_id"]) %>%
+  #                         left_join(dt_dbobj_rep_fund_summary, c("fund_id" = "fund_id")) %>%
+  #                         select()
+                          
+
   
 } # SERV function end
 
@@ -219,7 +241,8 @@ ui <- dashboardPage(
 
 # UI dashboardHeader() start ----------------------------------------------
 
-  dashboardHeader(title="Fund4Me", titleWidth = "250px"),
+  dashboardHeader(title="Fund4Me", titleWidth = "250px"
+                  ),
 
 # UI dashboardSidebar() start ---------------------------------------------
 
@@ -253,6 +276,11 @@ ui <- dashboardPage(
 # UI dashboardBody() start ------------------------------------------------
 
   dashboardBody(
+    # includeCSS("www/stylesheet_ext.css"),
+    tags$head(
+      tags$link(rel = "stylesheet", type = "text/css", href = "stylesheet_ext.css"),
+      tags$link(rel = "stylesheet", type = "text/css", href = "www/stylesheet_ext.css")
+    ),
 
 # UI tabItems() start -----------------------------------------------------
 
@@ -395,6 +423,7 @@ tabItem(tabName = "eq_funds_overview",
                  )
           )
         ),
+        uiOutput("UI_block_funds_overview_fund_details_Eq_links"),
         uiOutput("UI_block_funds_overview_fund_details_Eq")
 ),
 
@@ -415,6 +444,7 @@ tabItem(tabName = "absret_funds_overview",
                  )
           )
         ),
+        uiOutput("UI_block_funds_overview_fund_details_AbsRet_links"),
         uiOutput("UI_block_funds_overview_fund_details_AbsRet")
 ),
 
@@ -435,6 +465,7 @@ tabItem(tabName = "bond_funds_overview",
                  )
           )
         ),
+        uiOutput("UI_block_funds_overview_fund_details_Bond_links"),
         uiOutput("UI_block_funds_overview_fund_details_Bond")
         ),
 
@@ -455,13 +486,14 @@ tabItem(tabName = "oth_funds_overview",
                  )
           )
         ),
+        uiOutput("UI_block_funds_overview_fund_details_Oth_links"),
         uiOutput("UI_block_funds_overview_fund_details_Oth")
         ),
 
 # UI tabItem Selections - Recession Proof ----------------------------------
 
 tabItem(tabName = "sel_recessionproof",
-        h2("Selections", tags$small("Recession-Proof Funds")),
+        h2("Fund Selections", tags$small("Recession-Proof Funds")),
         fluidRow(
           column(width = 12,
                  box(width = NULL,
@@ -478,7 +510,7 @@ tabItem(tabName = "sel_recessionproof",
                  )
           ),
         fluidRow(
-          column(width = 4,
+          column(width = 7,
                  box(status = "primary",
                      solidHeader = F,
                      width = NULL,
@@ -486,9 +518,32 @@ tabItem(tabName = "sel_recessionproof",
                      p("The financial crisis of 2007-2009 resulted in a major decline throughout the world's financial markets. This translated in the United States to a 17-month bear market between 9 October 2007 and 9 March 2009. Table below shows fund performances within this period."),
                      DT::dataTableOutput("DT_sftq_perf")
                      )
+                 ),
+          column(width = 5,
+                 box(width = NULL,
+                     solidHeader = F,
+                     tags$table(
+                       tags$col(width="125"),
+                       tags$tr(class="sftq-desc-row",
+                         tags$td(class="sftq-desc-td",tags$b("Reporting Period")),
+                         tags$td(class="sftq-desc-td","9 October 2007 to 9 March 2009, time window the performance and risk measures are based on.")
+                       ),
+                       tags$tr(class="sftq-desc-row",
+                         tags$td(class="sftq-desc-td",tags$b("Return")),
+                         tags$td(class="sftq-desc-td","Simple cumulative return between the beginning and end of reporting period.")
+                       ),
+                       tags$tr(class="sftq-desc-row",
+                         tags$td(class="sftq-desc-td",tags$b("Volatility")),
+                         tags$td(class="sftq-desc-td","Annualized volatility, calculated on price changes within the reporting period.")
+                       ),
+                       tags$tr(#class="sftq-desc-row",
+                         tags$td(class="sftq-desc-td",tags$b("Max. Drawdown")),
+                         tags$td(class="sftq-desc-td","The largest plunge during the Financial Crisis.")
+                       )
+                     )
                  )
+                )
           )
-        #DT_sftq_perf
         ),
 
 # UI tabItem return & risk summary ----------------------------------------
@@ -519,6 +574,20 @@ tabItem(tabName = "sel_recessionproof",
                        )
                 )
               ),
+              # fluidRow(
+              #          infoBox(title = "Monitored Funds",
+              #                  color = "light-blue",
+              #                  subtitle = "Number of Funds",
+              #                  icon= icon("hashtag"),
+              #                  value = 41
+              #                  ),
+              #          infoBox(title = "Monitored Funds",
+              #                  color = "light-blue",
+              #                  subtitle = "Asset Under Management",
+              #                  icon= icon("money"),
+              #                  value = "150 BN"
+              #          )
+              # ),
               fluidRow(
                 column(width = 7,
                        box(status = "primary",
