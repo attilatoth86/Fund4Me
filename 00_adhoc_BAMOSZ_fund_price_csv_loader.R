@@ -1,10 +1,12 @@
 
 source("db_f.R")
 
+options(scipen = 999, digits = 4, encoding = "iso-8859-2")
+
 ### USER VARIABLES ############################################################
-fund_short_name <- "AEGON Polish Bond Fund"
-file_path <- "/home/ati/Fund4Me/data_source/AEGON Lengyel Kötvény.csv"
-no_skip_lines <- 18 # default should be 18
+fund_short_name <- "CONCORDE 3000"
+file_path <- "/home/ati/Fund4Me/data_source/Concorde 3000.csv"
+no_skip_lines <- 50 # default should be ?18?
 ###############################################################################
 
 if(fund_short_name!=psqlQuery(sprintf("SELECT short_name FROM dw.fund WHERE short_name='%s'",fund_short_name))$result[1,1]){
