@@ -19,7 +19,7 @@ server <- function(input, output, session) {
 
 # SERV progress bar -------------------------------------------------------
 
-  progress <- Progress$new(session, min=0, max=7)
+  progress <- Progress$new(session, min=0, max=14)
   on.exit(progress$close())
   progress$set(message = 'Fund4Me is loading data in the background.',
                detail = 'You may use the application meanwhile..')
@@ -62,6 +62,8 @@ server <- function(input, output, session) {
 
 # SERV prep Recession Proof ---------------------------------------------
 
+  progress$set(value = 6) #######################################################################################
+  
   sftq_fundid_filter <- dt_dbobj_rep_fund_summary[is.na(dt_dbobj_rep_fund_summary$return_sftq)==F,"fund_id"]
   
   disp_DT_sftq_perf <- dt_dbobj_rep_fund_summary %>% filter(fund_id %in% sftq_fundid_filter) %>% mutate(drawdown_sftq_length_rep=paste(drawdown_sftq_length,"days")) %>% arrange(desc(return_sftq)) %>% select("Fund Name"=short_name, "Return"=return_sftq, "Volatility"=volatility_sftq, "Max. Drawdown"=drawdown_sftq_depth, "Max. Drawdown Length"=drawdown_sftq_length_rep)
@@ -96,7 +98,7 @@ server <- function(input, output, session) {
 
 # SERV creating output$ objects - Return & Risk Summary --------------------
 
-  progress$set(value = 6) #######################################################################################
+  progress$set(value = 7) #######################################################################################
   output$DT_cum_return <- DT::renderDataTable(DT::datatable(disp_DT_cum_return, extensions = "Responsive", options = list(language = list(info = "_START_ to _END_ of _TOTAL_", paginate = list(previous = "<<", `next` = ">>")), ordering=T, order = list(list(5, 'desc')), pageLength = 5, bLengthChange=F, searching=F, paging=T, scrollX = T), rownames=F) %>% formatPercentage(c("YTD","1M","3M","6M","1Y","2Y","3Y"),2))
   output$DT_ann_return <- DT::renderDataTable(DT::datatable(disp_DT_ann_return, extensions = "Responsive", options = list(language = list(info = "_START_ to _END_ of _TOTAL_", paginate = list(previous = "<<", `next` = ">>")), ordering=T, order = list(list(1, 'desc')), pageLength = 5, bLengthChange=F, searching=F, paging=T, scrollX = T), rownames=F) %>% formatPercentage(c("2Y","3Y","5Y","10Y"),2))
   output$DT_volatility <- DT::renderDataTable(DT::datatable(disp_DT_volatility, extensions = "Responsive", options = list(language = list(info = "_START_ to _END_ of _TOTAL_", paginate = list(previous = "<<", `next` = ">>")), ordering=T, order = list(list(4, 'asc')), pageLength = 5, bLengthChange=F, searching=F, paging=T, scrollX = T), rownames=F) %>% formatPercentage(c("1Y","2Y","3Y","5Y","10Y"),2))
@@ -104,6 +106,7 @@ server <- function(input, output, session) {
 
 # SERV creating output$ objects - LT price change plots --------------------
 
+  progress$set(value = 8) #######################################################################################
   lapply(dt_dbobj_rep_fund_summary$fund_id, function(i_fundid){
     dt_proc <- dt_dbobj_rep_fund_price_daily_analytics[dt_dbobj_rep_fund_price_daily_analytics$fund_id==i_fundid,]
     output[[paste0("PLT_price_chg_pct_fund_",i_fundid)]] <- plotly::renderPlotly(plot_ly() %>% add_trace(data=dt_proc, x=~date, y=~price, mode="lines") %>% layout(xaxis=list(title=""), yaxis=list(title="Unit Price")))
@@ -111,6 +114,7 @@ server <- function(input, output, session) {
 
 # SERV creating output$ objects - Fund info boxes --------------------------
 
+  progress$set(value = 9) #######################################################################################
   lapply(dt_dbobj_rep_fund_summary$fund_id, function(i_fundid){
     output[[paste0("UI_box_summary_fund_",i_fundid)]] <- renderUI({
       box(width = 6,
@@ -122,73 +126,73 @@ server <- function(input, output, session) {
             tags$col(width="180"),
             tags$col(width="270"),
             tags$tr(
-              tags$td(style="padding: 1px 3px 1px 1px;vertical-align:top;",tags$b("ISIN")),
-              tags$td(style="padding: 1px 3px 1px 1px;vertical-align:top;",
+              tags$td(class="fund-card-upper-td",tags$b("ISIN")),
+              tags$td(class="fund-card-upper-td",
                       dt_dbobj_rep_fund_summary[dt_dbobj_rep_fund_summary$fund_id==i_fundid,"isin"])
             ),
             tags$tr(
-              tags$td(style="padding: 1px 3px 1px 1px;vertical-align:top;",tags$b("Fund Category")),
-              tags$td(style="padding: 1px 3px 1px 1px;vertical-align:top;",
+              tags$td(class="fund-card-upper-td",tags$b("Fund Category")),
+              tags$td(class="fund-card-upper-td",
                       dt_dbobj_rep_fund_summary[dt_dbobj_rep_fund_summary$fund_id==i_fundid,"fund_category"])
             ),
             tags$tr(
-              tags$td(style="padding: 1px 3px 1px 1px;vertical-align:top;",tags$b("Asset Manager")),
-              tags$td(style="padding: 1px 3px 1px 1px;vertical-align:top;",
+              tags$td(class="fund-card-upper-td",tags$b("Asset Manager")),
+              tags$td(class="fund-card-upper-td",
                       dt_dbobj_rep_fund_summary[dt_dbobj_rep_fund_summary$fund_id==i_fundid,"asset_manager_name"])
             ),
             tags$tr(
-              tags$td(style="padding: 1px 3px 1px 1px;vertical-align:top;",tags$b("Currency")),
-              tags$td(style="padding: 1px 3px 1px 1px;vertical-align:top;",
+              tags$td(class="fund-card-upper-td",tags$b("Currency")),
+              tags$td(class="fund-card-upper-td",
                       dt_dbobj_rep_fund_summary[dt_dbobj_rep_fund_summary$fund_id==i_fundid,"currency"])
             ),
             tags$tr(
-              tags$td(style="padding: 1px 3px 1px 1px;vertical-align:top;",tags$b("Start Date")),
-              tags$td(style="padding: 1px 3px 1px 1px;vertical-align:top;",
+              tags$td(class="fund-card-upper-td",tags$b("Start Date")),
+              tags$td(class="fund-card-upper-td",
                       dt_dbobj_rep_fund_summary[dt_dbobj_rep_fund_summary$fund_id==i_fundid,"date_start"])
             ),
             tags$tr(
-              tags$td(style="padding: 1px 3px 1px 1px;vertical-align:top;",tags$b("Asset Under Management")),
-              tags$td(style="padding: 1px 3px 1px 1px;vertical-align:top;",
+              tags$td(class="fund-card-upper-td",tags$b("Asset Under Management")),
+              tags$td(class="fund-card-upper-td",
                       paste(format(dt_dbobj_rep_fund_summary[dt_dbobj_rep_fund_summary$fund_id==i_fundid,"nav_recent"],big.mark=" "),dt_dbobj_rep_fund_summary[dt_dbobj_rep_fund_summary$fund_id==i_fundid,"currency"]))
             )
           ),
           hr(),
           tags$table(
             tags$tr(
-              tags$td(style="padding: 1px 50px 1px 1px;vertical-align:top;",tags$b("Key Risk & Performance Indicators")),
-              tags$td(style="padding: 1px 5px 1px 5px;text-align:center;vertical-align:top;",tags$b("1Y")),
-              tags$td(style="padding: 1px 5px 1px 5px;text-align:center;vertical-align:top;",tags$b("3Y")),
-              tags$td(style="padding: 1px 5px 1px 5px;text-align:center;vertical-align:top;",tags$b("5Y"))
+              tags$td(class="fund-card-metrics-td-col1",tags$b("Key Risk & Performance Indicators")),
+              tags$td(class="fund-card-metrics-td",tags$b("1Y")),
+              tags$td(class="fund-card-metrics-td",tags$b("3Y")),
+              tags$td(class="fund-card-metrics-td",tags$b("5Y"))
             ),
             tags$tr(
-              tags$td(style="padding: 1px 50px 1px 1px;vertical-align:top;","Annualized Return"),
-              tags$td(style="padding: 1px 5px 1px 5px;text-align:center;vertical-align:top;",sprintf("%.2f%%",100*dt_dbobj_rep_fund_summary[dt_dbobj_rep_fund_summary$fund_id==i_fundid,"return_1yr"])),
-              tags$td(style="padding: 1px 5px 1px 5px;text-align:center;vertical-align:top;",sprintf("%.2f%%",100*dt_dbobj_rep_fund_summary[dt_dbobj_rep_fund_summary$fund_id==i_fundid,"return_ann_3yr"])),
-              tags$td(style="padding: 1px 5px 1px 5px;text-align:center;vertical-align:top;",sprintf("%.2f%%",100*dt_dbobj_rep_fund_summary[dt_dbobj_rep_fund_summary$fund_id==i_fundid,"return_ann_5yr"]))
+              tags$td(class="fund-card-metrics-td-col1","Annualized Return"),
+              tags$td(class="fund-card-metrics-td",sprintf("%.2f%%",100*dt_dbobj_rep_fund_summary[dt_dbobj_rep_fund_summary$fund_id==i_fundid,"return_1yr"])),
+              tags$td(class="fund-card-metrics-td",sprintf("%.2f%%",100*dt_dbobj_rep_fund_summary[dt_dbobj_rep_fund_summary$fund_id==i_fundid,"return_ann_3yr"])),
+              tags$td(class="fund-card-metrics-td",sprintf("%.2f%%",100*dt_dbobj_rep_fund_summary[dt_dbobj_rep_fund_summary$fund_id==i_fundid,"return_ann_5yr"]))
             ),
             tags$tr(
-              tags$td(style="padding: 1px 50px 1px 1px;vertical-align:top;","Annualized Volatility"),
-              tags$td(style="padding: 1px 5px 1px 5px;text-align:center;vertical-align:top;",sprintf("%.2f%%",100*dt_dbobj_rep_fund_summary[dt_dbobj_rep_fund_summary$fund_id==i_fundid,"volatility_1yr"])),
-              tags$td(style="padding: 1px 5px 1px 5px;text-align:center;vertical-align:top;",sprintf("%.2f%%",100*dt_dbobj_rep_fund_summary[dt_dbobj_rep_fund_summary$fund_id==i_fundid,"volatility_3yr"])),
-              tags$td(style="padding: 1px 5px 1px 5px;text-align:center;vertical-align:top;",sprintf("%.2f%%",100*dt_dbobj_rep_fund_summary[dt_dbobj_rep_fund_summary$fund_id==i_fundid,"volatility_5yr"]))
+              tags$td(class="fund-card-metrics-td-col1","Annualized Volatility"),
+              tags$td(class="fund-card-metrics-td",sprintf("%.2f%%",100*dt_dbobj_rep_fund_summary[dt_dbobj_rep_fund_summary$fund_id==i_fundid,"volatility_1yr"])),
+              tags$td(class="fund-card-metrics-td",sprintf("%.2f%%",100*dt_dbobj_rep_fund_summary[dt_dbobj_rep_fund_summary$fund_id==i_fundid,"volatility_3yr"])),
+              tags$td(class="fund-card-metrics-td",sprintf("%.2f%%",100*dt_dbobj_rep_fund_summary[dt_dbobj_rep_fund_summary$fund_id==i_fundid,"volatility_5yr"]))
             ),
             tags$tr(
-              tags$td(style="padding: 1px 50px 1px 1px;vertical-align:top;",""),
-              tags$td(style="padding: 1px 5px 1px 5px;text-align:center;vertical-align:top;",""),
-              tags$td(style="padding: 1px 5px 1px 5px;text-align:center;vertical-align:top;",""),
-              tags$td(style="padding: 1px 5px 1px 5px;text-align:center;vertical-align:top;","")
+              tags$td(class="fund-card-metrics-td-col1",""),
+              tags$td(class="fund-card-metrics-td",""),
+              tags$td(class="fund-card-metrics-td",""),
+              tags$td(class="fund-card-metrics-td","")
             ),
             tags$tr(
-              tags$td(style="padding: 1px 50px 1px 1px;vertical-align:top;",""),
-              tags$td(style="padding: 1px 5px 1px 5px;text-align:center;vertical-align:top;",tags$b("Peak")),
-              tags$td(style="padding: 1px 5px 1px 5px;text-align:center;vertical-align:top;",tags$b("Trough")),
-              tags$td(style="padding: 1px 5px 1px 5px;text-align:center;vertical-align:top;",tags$b("Decline"))
+              tags$td(class="fund-card-metrics-td-col1",""),
+              tags$td(class="fund-card-metrics-td",tags$b("Peak")),
+              tags$td(class="fund-card-metrics-td",tags$b("Trough")),
+              tags$td(class="fund-card-metrics-td",tags$b("Decline"))
             ),
             tags$tr(
-              tags$td(style="padding: 1px 50px 1px 1px;vertical-align:top;","Most Severe Drawdown"),
-              tags$td(style="padding: 1px 5px 1px 5px;text-align:center;vertical-align:top;",dt_dbobj_rep_fund_summary[dt_dbobj_rep_fund_summary$fund_id==i_fundid,"drawdown_from"]),
-              tags$td(style="padding: 1px 5px 1px 5px;text-align:center;vertical-align:top;",dt_dbobj_rep_fund_summary[dt_dbobj_rep_fund_summary$fund_id==i_fundid,"drawdown_trough"]),
-              tags$td(style="padding: 1px 5px 1px 5px;text-align:center;vertical-align:top;",sprintf("%.2f%%",100*dt_dbobj_rep_fund_summary[dt_dbobj_rep_fund_summary$fund_id==i_fundid,"drawdown_depth"]))
+              tags$td(class="fund-card-metrics-td-col1","Most Severe Drawdown"),
+              tags$td(class="fund-card-metrics-td",dt_dbobj_rep_fund_summary[dt_dbobj_rep_fund_summary$fund_id==i_fundid,"drawdown_from"]),
+              tags$td(class="fund-card-metrics-td",dt_dbobj_rep_fund_summary[dt_dbobj_rep_fund_summary$fund_id==i_fundid,"drawdown_trough"]),
+              tags$td(class="fund-card-metrics-td",sprintf("%.2f%%",100*dt_dbobj_rep_fund_summary[dt_dbobj_rep_fund_summary$fund_id==i_fundid,"drawdown_depth"]))
             )
           ),
           plotlyOutput(paste0("PLT_price_chg_pct_fund_",i_fundid))
@@ -198,6 +202,7 @@ server <- function(input, output, session) {
 
 # SERV creating output$ objects - Equity Funds -----------------------------
 
+  progress$set(value = 10) #######################################################################################
   output$UI_block_funds_overview_fund_details_Eq <- renderUI({
       fluidRow(
         lapply((filter(dt_dbobj_rep_fund_summary, fund_category =="Equity") %>% arrange(desc(nav_recent)))$fund_id, function(i_fundid) {
@@ -211,6 +216,7 @@ server <- function(input, output, session) {
 
 # SERV creating output$ objects - Absolute Return Funds --------------------
   
+  progress$set(value = 11) #######################################################################################
   output$UI_block_funds_overview_fund_details_AbsRet <- renderUI({
     fluidRow(
       lapply((filter(dt_dbobj_rep_fund_summary,fund_category =="Absolute Return") %>% arrange(desc(nav_recent)))$fund_id, function(i_fundid) {
@@ -224,6 +230,7 @@ server <- function(input, output, session) {
 
 # SERV creating output$ objects - Bond Funds -------------------------------
   
+  progress$set(value = 12) #######################################################################################
   output$UI_block_funds_overview_fund_details_Bond <- renderUI({
     fluidRow(
       lapply((filter(dt_dbobj_rep_fund_summary,fund_category %in% c("Long Bond","Short Bond","Unlimited Duration Bond")) %>% arrange(desc(nav_recent)))$fund_id, function(i_fundid) {
@@ -237,6 +244,7 @@ server <- function(input, output, session) {
   
 # SERV creating output$ objects - Other Funds -------------------------------
   
+  progress$set(value = 13) #######################################################################################
   output$UI_block_funds_overview_fund_details_Oth <- renderUI({
     fluidRow(
       lapply((filter(dt_dbobj_rep_fund_summary,!fund_category %in% c("Equity","Absolute Return","Long Bond","Short Bond","Unlimited Duration Bond")) %>% arrange(desc(nav_recent)))$fund_id, function(i_fundid) {
@@ -250,7 +258,7 @@ server <- function(input, output, session) {
 
 # SERV creating output$ objects - Selection - Recession Proof --------------
 
-  progress$set(value = 7) #######################################################################################
+  progress$set(value = 14) #######################################################################################
 
   output$DT_sftq_perf <- DT::renderDataTable(DT::datatable(disp_DT_sftq_perf, extensions = "Responsive", options = list(language = list(info = "_START_ to _END_ of _TOTAL_", paginate = list(previous = "<<", `next` = ">>")), ordering=T, pageLength = 5, bLengthChange=F, searching=F, paging=T, scrollX = T, columnDefs = list(list(className = 'dt-center', targets = 1:4))), rownames=F) %>% formatPercentage(c("Return","Volatility","Max. Drawdown"),2))
   output$plot_sftq_price_chg <- plotly::renderPlotly(plot_obj_price_sftq)
