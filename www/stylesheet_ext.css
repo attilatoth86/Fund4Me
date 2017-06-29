@@ -14,3 +14,16 @@ padding-bottom: 2px;
 padding-right:1px;
 padding-left:1px;
 }
+.fund-card-upper-td {
+  padding: 1px 3px 1px 1px;
+  vertical-align:top;
+}
+.fund-card-metrics-td {
+  padding: 1px 5px 1px 5px;
+  text-align:center;
+  vertical-align:top;
+}
+.fund-card-metrics-td-col1 {
+  padding: 1px 50px 1px 1px;
+  vertical-align:top;
+}
