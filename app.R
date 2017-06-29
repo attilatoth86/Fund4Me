@@ -5,7 +5,7 @@ library(shiny) # http://shiny.rstudio.com
 library(shinydashboard) # https://rstudio.github.io/shinydashboard/
 library(plotly) # https://plot.ly
 library(DT) # https://rstudio.github.io/DT/
-library(PerformanceAnalytics) # https://www.rdocumentation.org/packages/PerformanceAnalytics/
+#library(PerformanceAnalytics) # https://www.rdocumentation.org/packages/PerformanceAnalytics/
 library(plyr)
 library(dplyr)
 
@@ -61,9 +61,39 @@ server <- function(input, output, session) {
   disp_DT_drawdown$`Peak` <- as.character(disp_DT_drawdown$`Peak`)
   disp_DT_drawdown$`Trough` <- as.character(disp_DT_drawdown$`Trough`)
 
-# SERV prep DT Recession Proof ---------------------------------------------
+# SERV prep Recession Proof ---------------------------------------------
 
-  disp_DT_sftq_perf <-dt_dbobj_rep_fund_summary %>% filter(is.na(return_sftq)==F) %>% mutate(drawdown_sftq_length_rep=paste(drawdown_sftq_length,"days")) %>% arrange(desc(return_sftq)) %>% select("Fund Name"=short_name, "Return"=return_sftq, "Volatility"=volatility_sftq, "Max. Drawdown"=drawdown_sftq_depth, "Max. Drawdown Length"=drawdown_sftq_length_rep)
+  sftq_fundid_filter <- dt_dbobj_rep_fund_summary[is.na(dt_dbobj_rep_fund_summary$return_sftq)==F,"fund_id"]
+  
+  disp_DT_sftq_perf <- dt_dbobj_rep_fund_summary %>% filter(fund_id %in% sftq_fundid_filter) %>% mutate(drawdown_sftq_length_rep=paste(drawdown_sftq_length,"days")) %>% arrange(desc(return_sftq)) %>% select("Fund Name"=short_name, "Return"=return_sftq, "Volatility"=volatility_sftq, "Max. Drawdown"=drawdown_sftq_depth, "Max. Drawdown Length"=drawdown_sftq_length_rep)
+  
+  plot_df_sftq_price <- dt_dbobj_rep_fund_price_daily_analytics %>%
+    filter(fund_id %in% sftq_fundid_filter & 
+           date>="2007-10-09" & date<="2009-03-09") %>%
+    left_join(dt_dbobj_rep_fund_summary, c("fund_id" = "fund_id")) %>%
+    select(fund_id, short_name, date, price) %>%
+    left_join(
+      dt_dbobj_rep_fund_price_daily_analytics %>% inner_join(
+        dt_dbobj_rep_fund_price_daily_analytics %>%
+          filter(fund_id %in% sftq_fundid_filter &date>="2007-10-09") %>%
+          group_by(fund_id) %>%
+          summarise(date=min(date))
+        , by = c("fund_id","date")) %>% select(fund_id, start_price=price)
+      ,by=c("fund_id")
+    ) %>%
+    mutate(price_chg_pct=price/start_price-1) %>% select(fund_id, short_name, date, price, price_chg_pct)
+  
+  plot_obj_price_sftq <- plot_ly() %>% layout(xaxis=list(title=""), yaxis=list(title="Price Change %"), hovermode = 'closest')
+  for(i_sftq_fundid in sftq_fundid_filter) {  
+    plot_obj_price_sftq <- add_trace(p = plot_obj_price_sftq,
+                                    data=plot_df_sftq_price[plot_df_sftq_price$fund_id==i_sftq_fundid,], 
+                                    x=~date, 
+                                    y=~price_chg_pct*100,
+                                    name=dt_dbobj_rep_fund_summary[dt_dbobj_rep_fund_summary$fund_id==i_sftq_fundid,"short_name"],
+                                    visible={if(dt_dbobj_rep_fund_summary[dt_dbobj_rep_fund_summary$fund_id==i_sftq_fundid,"return_sftq"]>0) TRUE else "legendonly"},
+                                    mode="lines",
+                                    evaluate = TRUE)
+  }
 
 # SERV creating output$ objects - Return & Risk Summary --------------------
 
@@ -77,7 +107,7 @@ server <- function(input, output, session) {
 
   lapply(dt_dbobj_rep_fund_summary$fund_id, function(i_fundid){
     dt_proc <- dt_dbobj_rep_fund_price_daily_analytics[dt_dbobj_rep_fund_price_daily_analytics$fund_id==i_fundid,]
-    output[[paste0("PLT_price_chg_pct_fund_",i_fundid)]] <- plotly::renderPlotly(plot_ly() %>% add_trace(data=dt_proc, x=~date, y=~price_chg*100, mode="lines") %>% layout(xaxis=list(title=""), yaxis=list(title="Price Change %")))
+    output[[paste0("PLT_price_chg_pct_fund_",i_fundid)]] <- plotly::renderPlotly(plot_ly() %>% add_trace(data=dt_proc, x=~date, y=~price, mode="lines") %>% layout(xaxis=list(title=""), yaxis=list(title="Unit Price")))
   })
 
 # SERV creating output$ objects - Fund info boxes --------------------------
@@ -224,13 +254,7 @@ server <- function(input, output, session) {
   progress$set(value = 7) #######################################################################################
 
   output$DT_sftq_perf <- DT::renderDataTable(DT::datatable(disp_DT_sftq_perf, extensions = "Responsive", options = list(language = list(info = "_START_ to _END_ of _TOTAL_", paginate = list(previous = "<<", `next` = ">>")), ordering=T, pageLength = 5, bLengthChange=F, searching=F, paging=T, scrollX = T, columnDefs = list(list(className = 'dt-center', targets = 1:4))), rownames=F) %>% formatPercentage(c("Return","Volatility","Max. Drawdown"),2))
-  # plot_dt_sftq_price <- dt_dbobj_rep_fund_price_daily_analytics %>%
-  #                         filter(date>="2007-10-09" & 
-  #                                date<="2009-03-09" & 
-  #                                fund_id %in% dt_dbobj_rep_fund_summary[is.na(dt_dbobj_rep_fund_summary$return_sftq)==F,"fund_id"]) %>%
-  #                         left_join(dt_dbobj_rep_fund_summary, c("fund_id" = "fund_id")) %>%
-  #                         select()
-                          
+  output$plot_sftq_price_chg <- plotly::renderPlotly(plot_obj_price_sftq)
 
   
 } # SERV function end
@@ -538,11 +562,20 @@ tabItem(tabName = "sel_recessionproof",
                        ),
                        tags$tr(#class="sftq-desc-row",
                          tags$td(class="sftq-desc-td",tags$b("Max. Drawdown")),
-                         tags$td(class="sftq-desc-td","The largest plunge during the Financial Crisis.")
+                         tags$td(class="sftq-desc-td","The largest plunge in fund prices during the Financial Crisis.")
                        )
                      )
                  )
                 )
+          ),
+        fluidRow(
+          column(width = 12,
+                 box(status = "primary",
+                     width = NULL,
+                     plotlyOutput("plot_sftq_price_chg"),
+                     "Note: by default, the best performers appear on the chart but you may control the displayed time series by clicking on fund names in the legend."
+                     )
+                 )
           )
         ),
 
