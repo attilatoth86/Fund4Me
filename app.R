@@ -5,9 +5,8 @@ library(shiny) # http://shiny.rstudio.com
 library(shinydashboard) # https://rstudio.github.io/shinydashboard/
 library(plotly) # https://plot.ly
 library(DT) # https://rstudio.github.io/DT/
-#library(PerformanceAnalytics) # https://www.rdocumentation.org/packages/PerformanceAnalytics/
-library(plyr)
-library(dplyr)
+library(plyr) # http://had.co.nz/plyr/
+library(dplyr) # http://dplyr.tidyverse.org
 
 # Init source external resources ------------------------------------------
 
@@ -607,20 +606,6 @@ tabItem(tabName = "sel_recessionproof",
                        )
                 )
               ),
-              # fluidRow(
-              #          infoBox(title = "Monitored Funds",
-              #                  color = "light-blue",
-              #                  subtitle = "Number of Funds",
-              #                  icon= icon("hashtag"),
-              #                  value = 41
-              #                  ),
-              #          infoBox(title = "Monitored Funds",
-              #                  color = "light-blue",
-              #                  subtitle = "Asset Under Management",
-              #                  icon= icon("money"),
-              #                  value = "150 BN"
-              #          )
-              # ),
               fluidRow(
                 column(width = 7,
                        box(status = "primary",
