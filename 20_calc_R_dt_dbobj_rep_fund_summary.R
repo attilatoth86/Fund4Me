@@ -146,7 +146,7 @@ dt_dbobj_rep_fund_summary <- psqlQuery("SELECT fs.fund_id, fs.source_object_id, 
                                           fs.price_2yr, fs.price_3yr, fs.price_5yr, fs.price_10yr,
                                           fs.nav_recent, fs.price_sftq_start, fs.price_sftq_end,
                                           fs.date_sftq_start, fs.date_sftq_end,
-                                          f.name, f.short_name, f.isin, 
+                                          f.name, f.short_name, f.isin, f.rec_inv_term,
                                           o.name asset_manager_name, 
                                           c.iso_code currency, 
                                           c_fundcat.description fund_category

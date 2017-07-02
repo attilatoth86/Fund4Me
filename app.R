@@ -60,6 +60,10 @@ server <- function(input, output, session) {
   disp_DT_drawdown$`Peak` <- as.character(disp_DT_drawdown$`Peak`)
   disp_DT_drawdown$`Trough` <- as.character(disp_DT_drawdown$`Trough`)
 
+# SERV prep DT Sharpe Ratio ---------------------------------------------
+
+  disp_DT_sharpe <- dt_dbobj_rep_fund_summary %>% select("Fund Name"=short_name, "1Y"=sharpe_ratio_1yr, "2Y"=sharpe_ratio_2yr, "3Y"=sharpe_ratio_3yr, "5Y"=sharpe_ratio_5yr)
+
 # SERV prep Recession Proof ---------------------------------------------
 
   progress$set(value = 6) #######################################################################################
@@ -103,12 +107,13 @@ server <- function(input, output, session) {
   output$DT_ann_return <- DT::renderDataTable(DT::datatable(disp_DT_ann_return, extensions = "Responsive", options = list(language = list(info = "_START_ to _END_ of _TOTAL_", paginate = list(previous = "<<", `next` = ">>")), ordering=T, order = list(list(1, 'desc')), pageLength = 5, bLengthChange=F, searching=F, paging=T, scrollX = T), rownames=F) %>% formatPercentage(c("2Y","3Y","5Y","10Y"),2))
   output$DT_volatility <- DT::renderDataTable(DT::datatable(disp_DT_volatility, extensions = "Responsive", options = list(language = list(info = "_START_ to _END_ of _TOTAL_", paginate = list(previous = "<<", `next` = ">>")), ordering=T, order = list(list(4, 'asc')), pageLength = 5, bLengthChange=F, searching=F, paging=T, scrollX = T), rownames=F) %>% formatPercentage(c("1Y","2Y","3Y","5Y","10Y"),2))
   output$DT_drawdown <- DT::renderDataTable(DT::datatable(disp_DT_drawdown, extensions = "Responsive", options = list(language = list(info = "_START_ to _END_ of _TOTAL_", paginate = list(previous = "<<", `next` = ">>")), ordering=T, order = list(list(1, 'desc')), pageLength = 5, bLengthChange=F, searching=F, paging=T, scrollX = T, columnDefs = list(list(className = 'dt-center', targets = 1:3))), rownames=F) %>% formatPercentage(c("Depth"),2))
+  output$DT_sharpe_ratio <- DT::renderDataTable(DT::datatable(disp_DT_sharpe, extensions = "Responsive", options = list(language = list(info = "_START_ to _END_ of _TOTAL_", paginate = list(previous = "<<", `next` = ">>")), ordering=T, order = list(list(4, 'desc')), pageLength = 5, bLengthChange=F, searching=F, paging=T, scrollX = T), rownames=F) %>% formatRound(c("1Y","2Y","3Y","5Y"),3))
 
 # SERV creating output$ objects - LT price change plots --------------------
 
   progress$set(value = 8) #######################################################################################
   lapply(dt_dbobj_rep_fund_summary$fund_id, function(i_fundid){
-    dt_proc <- dt_dbobj_rep_fund_price_daily_analytics[dt_dbobj_rep_fund_price_daily_analytics$fund_id==i_fundid,]
+    dt_proc <- dt_dbobj_rep_fund_price_daily_analytics[dt_dbobj_rep_fund_price_daily_analytics$fund_id==i_fundid,] %>% arrange(date)
     output[[paste0("PLT_price_chg_pct_fund_",i_fundid)]] <- plotly::renderPlotly(plot_ly() %>% add_trace(data=dt_proc, x=~date, y=~price, mode="lines") %>% layout(xaxis=list(title=""), yaxis=list(title="Unit Price")))
   })
 
@@ -154,6 +159,11 @@ server <- function(input, output, session) {
               tags$td(class="fund-card-upper-td",tags$b("Asset Under Management")),
               tags$td(class="fund-card-upper-td",
                       paste(format(dt_dbobj_rep_fund_summary[dt_dbobj_rep_fund_summary$fund_id==i_fundid,"nav_recent"],big.mark=" "),dt_dbobj_rep_fund_summary[dt_dbobj_rep_fund_summary$fund_id==i_fundid,"currency"]))
+            ),
+            tags$tr(
+              tags$td(class="fund-card-upper-td",tags$b("Recommended Investment Term")),
+              tags$td(class="fund-card-upper-td",
+                      dt_dbobj_rep_fund_summary[dt_dbobj_rep_fund_summary$fund_id==i_fundid,"rec_inv_term"])
             )
           ),
           hr(),
@@ -175,6 +185,12 @@ server <- function(input, output, session) {
               tags$td(class="fund-card-metrics-td",sprintf("%.2f%%",100*dt_dbobj_rep_fund_summary[dt_dbobj_rep_fund_summary$fund_id==i_fundid,"volatility_1yr"])),
               tags$td(class="fund-card-metrics-td",sprintf("%.2f%%",100*dt_dbobj_rep_fund_summary[dt_dbobj_rep_fund_summary$fund_id==i_fundid,"volatility_3yr"])),
               tags$td(class="fund-card-metrics-td",sprintf("%.2f%%",100*dt_dbobj_rep_fund_summary[dt_dbobj_rep_fund_summary$fund_id==i_fundid,"volatility_5yr"]))
+            ),
+            tags$tr(
+              tags$td(class="fund-card-metrics-td-col1","Annualized Sharpe Ratio"),
+              tags$td(class="fund-card-metrics-td",round(dt_dbobj_rep_fund_summary[dt_dbobj_rep_fund_summary$fund_id==i_fundid,"sharpe_ratio_1yr"],3)),
+              tags$td(class="fund-card-metrics-td",round(dt_dbobj_rep_fund_summary[dt_dbobj_rep_fund_summary$fund_id==i_fundid,"sharpe_ratio_3yr"],3)),
+              tags$td(class="fund-card-metrics-td",round(dt_dbobj_rep_fund_summary[dt_dbobj_rep_fund_summary$fund_id==i_fundid,"sharpe_ratio_5yr"],3))
             ),
             tags$tr(
               tags$td(class="fund-card-metrics-td-col1",""),
@@ -651,6 +667,17 @@ tabItem(tabName = "sel_recessionproof",
                            p("Most severe drawdown is the largest peak-to-trough decline during the lifetime of a fund, quoted as the percentage between the peak and the subsequent trough."),
                            DT::dataTableOutput("DT_drawdown"))
                 )
+              ),
+              fluidRow(
+                column(width = 6,
+                       box(status = "danger",
+                           solidHeader = F,
+                           width = NULL,
+                           title = tags$b(div(icon("balance-scale"), " Annualized Sharpe Ratio")),
+                           p("Sharpe Ratio is a measure for risk-adjusted return, it represents the average return earned in excess of the risk-free rate per unit of volatility. The greater Sharpe ratio indicates better risk-adjusted performance, and negative Sharpe ratio means that a risk-free asset would perform better than the security being analyzed."),
+                           DT::dataTableOutput("DT_sharpe_ratio")
+                        )
+                       )
               )
       )
 
